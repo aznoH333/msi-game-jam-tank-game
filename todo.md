@@ -31,5 +31,4 @@
 - [X] add turret statistics
 - [X] add overclock menu
 - [X] add overclock sliders
-- [ ] add currency and prices
-- [ ] add weight
+- [X] add currency and prices

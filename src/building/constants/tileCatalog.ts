@@ -8,6 +8,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_turret_base",
             width: 2,
             height: 2,
+            price: 10_000,
             turret: {
                 turretSprite: "tiles/debug_turret", 
                 accuracy: 3,
@@ -47,6 +48,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_heatsink",
             width: 1,
             height: 1,
+            price: 200,
         },
         {
             tileName: "Small battery",
@@ -55,6 +57,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             powerCapacity: 50,
+            price: 500,
         },
         {
             tileName: "Small generator",
@@ -63,6 +66,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             powerGenerationPerSecond: 5,
+            price: 1_000,
+
         },
         {
             tileName: "Big battery",
@@ -71,6 +76,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 2,
             height: 2,
             powerCapacity: 250,
+            price: 800,
         },
         {
             tileName: "Big generator",
@@ -79,6 +85,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 2,
             height: 2,
             powerGenerationPerSecond: 25,
+            price: 4_000,
         }
     ],
     "BLOCK": [
@@ -88,6 +95,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_tiles_0001",
             width: 1,
             height: 1,
+            price: 200,
         },
         {
             tileName: "Block 2",
@@ -95,6 +103,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_tiles_0002",
             width: 1,
             height: 1,
+            price: 200,
+
         },
         {
             tileName: "Block 3",
@@ -102,6 +112,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_tiles_0003",
             width: 1,
             height: 1,
+            price: 200,
+
         },
         {
             tileName: "Block 4",
@@ -109,6 +121,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_tiles_0004",
             width: 1,
             height: 1,
+            price: 200,
+
         },
         {
             tileName: "Big tile",
@@ -116,6 +130,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileSprite: "tiles/debug_tile_big",
             width: 2,
             height: 2,
+            price: 800,
+
         },
     ],
 };

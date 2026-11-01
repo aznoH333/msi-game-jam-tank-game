@@ -201,6 +201,8 @@ export function updateVehicleEditor(state: GameState): void {
                 && hover.y < placed.y + placed.base.height;
         });
         if (index >= 0) {
+            const removed = state.playerData.vehicle.tiles[index];
+            state.playerData.money += removed.base.price;
             state.playerData.vehicle.tiles.splice(index, 1);
         }
     } else if (!panning && leftDown) {
@@ -281,7 +283,8 @@ export function updateVehicleEditor(state: GameState): void {
                         && origin.y < placed.y + placed.base.height
                         && origin.y + tileToPlace.height > placed.y;
                 });
-                if (insideGrid && !blocked) {
+                if (insideGrid && !blocked && state.playerData.money >= tileToPlace.price) {
+                    state.playerData.money -= tileToPlace.price;
                     state.playerData.vehicle.tiles.push({
                         base: { ...tileToPlace },
                         x: origin.x,
@@ -380,6 +383,9 @@ export function updateVehicleEditor(state: GameState): void {
                 break;
             }
         }
+        if (previewColor !== "#ff5c5c" && state.playerData.money < selectedTile.price) {
+            previewColor = "#ff5c5c";
+        }
 
         drawTileSprite(
             selectedTile,
@@ -430,6 +436,7 @@ export function updateVehicleEditor(state: GameState): void {
     drawVehicleDetailsSidebar(
         state.playerData.vehicle,
         selectedTile,
+        state.playerData.money,
         selectedTab === "OVERCLOCK" ? selectedOverclockTile : undefined,
     );
 }

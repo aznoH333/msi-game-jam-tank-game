@@ -27,6 +27,9 @@ export interface BaseTile{
     powerCapacity?: number;
     powerGenerationPerSecond?: number;
 
+
+    price: number;
+
     turret?: BaseTurret;
 }
 

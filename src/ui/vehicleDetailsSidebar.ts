@@ -102,6 +102,7 @@ export function updateVehicleNameInput(vehicle: BaseVehicle): void {
 export function drawVehicleDetailsSidebar(
     vehicle: BaseVehicle,
     selected: BaseTile | null,
+    money: number,
     overclockTile?: PlacedTile | null,
 ): void {
     const x = GAME_WIDTH - DETAILS_SIDEBAR_WIDTH;
@@ -195,7 +196,8 @@ export function drawVehicleDetailsSidebar(
     let rowY = field.y + field.height + 16;
     rowY = drawInfoRow(x + PADDING, rowY, "Power capacity", String(getTotalPowerCapacity(vehicle)));
     rowY = drawInfoRow(x + PADDING, rowY, "Power generation", String(getPowerPerSecond(vehicle)));
-    drawInfoRow(x + PADDING, rowY, "Tile count", String(vehicle.tiles.length));
+    rowY = drawInfoRow(x + PADDING, rowY, "Tile count", String(vehicle.tiles.length));
+    drawInfoRow(x + PADDING, rowY, "Money", String(money));
 
     const overclockMode = overclockTile !== undefined;
     const shown = overclockMode ? overclockTile?.base ?? null : selected;
@@ -265,7 +267,7 @@ export function drawVehicleDetailsSidebar(
     // part stats; hide optional power and turret fields this part does not define
     rowY = previewY + previewSize + 48;
     rowY = drawInfoRow(x + PADDING, rowY, "Description", "placeholder");
-    rowY = drawInfoRow(x + PADDING, rowY, "Price", "placeholder");
+    rowY = drawInfoRow(x + PADDING, rowY, "Price", String(shown.price));
     rowY = drawInfoRow(x + PADDING, rowY, "Weight", "placeholder");
     rowY = drawInfoRow(x + PADDING, rowY, "Power draw", "placeholder");
     if (shown.powerGenerationPerSecond !== undefined) {
