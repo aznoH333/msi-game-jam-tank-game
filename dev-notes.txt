@@ -1,0 +1,26 @@
+Notes:
+Game idea : A tank building rpg. The player builds a tank. The main gameplay loop is the tanks fighting each other.
+The tanks are made of small parts. The part types include "gun", "building block", "utility".
+A core mechanic of the building part of the game will be overclocking. Overclocking allows the player to improve the performance of a block at the cost of additional power draw.
+
+Guns Allow the player to perform an attack during their turn.
+Guns have damage. Projectile count. Salvo count. Accuracy. Reload speed. Power draw per shot. Heat generation per shot.
+They need power to function. Each gun will have two available overclocks.
+Possible overclocks "Improved accuracy"
+
+Building blocks are just plain blocks. They have no power cost. They exist to tank damage.
+
+Utility blocks will serve a range of purposes. Important utility blocks inlcude "Power generator", "Heat sink", "Cooling fan", "Wire block"
+
+The tank building will be grid based. Some pieces can take up multiple grid spaces (always rectangular).
+The game loop will consist of 2 main parts -> Building area, Combat area.
+
+In the building area the player can improve their tank.
+In the combat area the player fights enemies. Combat will be realtime. The combat screen will have 3 parts. On the left will be a bar with the players actions. The right side will be split into a top and bottom half. The bottom half will be a view of the players tank. The top half will be a view of the enemy tank. In combat player can choose an ability from the sidebar and target it using the mouse in the top screen. When an ability is used it goes on cooldown.
+Combat ends when either the players or enemies tank is destroyed. The idea of the two combat screens is that there is a large space between the two tanks, and I only want to show the tanks. Kind of like FTL.
+
+Combat will also include an overheat mechanic. If the tank overheats it stunned for a while (until it cools off)
+
+Here is a basic gameplay loop example "building area" -> "combat" -> "combat" -> "combat" -> "repeat"
+
+Attacks in combat shoot projectiles. When these projectiles collide with the enemy tank they can damage individual parts. If a part is destroyed it no longer works (destroying guns prevents the enemy from shooting. Destroying important infrastructure blocks can disable the tank)

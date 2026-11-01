@@ -1,0 +1,16 @@
+{
+  "name": "msi-game-jam-tank-game",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "export:itch": "npm run build && rm -f tank-game.zip && cd dist && zip -r ../tank-game.zip ."
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^6.4.1"
+  }
+}
