@@ -41,6 +41,24 @@ export function clearCanvas(): void {
     context.fillRect(0, 0, window.innerWidth, window.innerHeight);
 }
 
+export interface DrawClip {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+let activeClip: DrawClip | null = null;
+
+/** Limit later drawRect, drawSprite, and drawText calls to this rectangle. */
+export function setDrawClip(clip: DrawClip | null): void {
+    activeClip = clip;
+}
+
+export function getDrawClip(): DrawClip | null {
+    return activeClip;
+}
+
 interface QueuedRect {
     x: number;
     y: number;
@@ -50,6 +68,7 @@ interface QueuedRect {
     zIndex: number;
     stroke: boolean;
     lineWidth: number;
+    clip: DrawClip | null;
 }
 
 const queuedRects: QueuedRect[] = [];
@@ -71,7 +90,7 @@ export function drawRect({
     color,
     zIndex = 0,
 }: DrawRectCommand): void {
-    queuedRects.push({ x, y, width, height, color, zIndex, stroke: false, lineWidth: 0 });
+    queuedRects.push({ x, y, width, height, color, zIndex, stroke: false, lineWidth: 0, clip: activeClip });
 }
 
 export interface StrokeRectCommand {
@@ -93,7 +112,7 @@ export function strokeRect({
     lineWidth = 1,
     zIndex = 0,
 }: StrokeRectCommand): void {
-    queuedRects.push({ x, y, width, height, color, zIndex, stroke: true, lineWidth });
+    queuedRects.push({ x, y, width, height, color, zIndex, stroke: true, lineWidth, clip: activeClip });
 }
 
 /** Paint rectangles queued by drawRect and strokeRect. Lower zIndex is drawn first. */
@@ -103,14 +122,20 @@ export function renderRects(): void {
 
     const context = getCanvasContext();
     for (const draw of draws) {
+        context.save();
+        if (draw.clip) {
+            context.beginPath();
+            context.rect(draw.clip.x, draw.clip.y, draw.clip.width, draw.clip.height);
+            context.clip();
+        }
         if (draw.stroke) {
             context.strokeStyle = draw.color;
             context.lineWidth = draw.lineWidth;
             context.strokeRect(draw.x, draw.y, draw.width, draw.height);
-            continue;
+        } else {
+            context.fillStyle = draw.color;
+            context.fillRect(draw.x, draw.y, draw.width, draw.height);
         }
-
-        context.fillStyle = draw.color;
-        context.fillRect(draw.x, draw.y, draw.width, draw.height);
+        context.restore();
     }
 }

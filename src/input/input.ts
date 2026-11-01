@@ -6,6 +6,7 @@ const MOUSE_BUTTON_FROM_MASK: { mask: number; button: number }[] = [
 
 let mouseX = -1;
 let mouseY = -1;
+let wheelDeltaY = 0;
 const heldMouseButtons = new Set<number>();
 const heldKeys = new Set<string>();
 let listening = false;
@@ -30,8 +31,28 @@ export function startInput(): void {
     listening = true;
 
     window.addEventListener("pointermove", trackPointer);
-    window.addEventListener("pointerdown", trackPointer);
+    window.addEventListener("pointerdown", (event) => {
+        if (event.button === 1) {
+            event.preventDefault();
+        }
+        trackPointer(event);
+    });
     window.addEventListener("pointerup", trackPointer);
+    window.addEventListener("wheel", (event) => {
+        let scale = 1;
+        if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+            scale = 16;
+        } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+            scale = window.innerHeight;
+        }
+        wheelDeltaY += event.deltaY * scale;
+        event.preventDefault();
+    }, { passive: false });
+    window.addEventListener("auxclick", (event) => {
+        if (event.button === 1) {
+            event.preventDefault();
+        }
+    });
     window.addEventListener("pointercancel", () => {
         heldMouseButtons.clear();
     });
@@ -58,6 +79,13 @@ export function getMousePosition(): { x: number; y: number } {
 /** `button` is 0 for left, 1 for middle, and 2 for right. */
 export function isMouseButtonDown(button: number): boolean {
     return heldMouseButtons.has(button);
+}
+
+/** Vertical wheel movement since the last call. Positive is scrolling down. */
+export function consumeWheelDelta(): number {
+    const delta = wheelDeltaY;
+    wheelDeltaY = 0;
+    return delta;
 }
 
 /** `code` is a KeyboardEvent.code, such as "KeyW" or "Space". */

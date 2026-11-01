@@ -1,4 +1,4 @@
-import { getCanvasContext } from "./canvas";
+import { getCanvasContext, getDrawClip, type DrawClip } from "./canvas";
 
 interface QueuedText {
     text: string;
@@ -9,6 +9,7 @@ interface QueuedText {
     align: CanvasTextAlign;
     baseline: CanvasTextBaseline;
     zIndex: number;
+    clip: DrawClip | null;
 }
 
 const queuedText: QueuedText[] = [];
@@ -34,7 +35,7 @@ export function drawText({
     baseline = "middle",
     zIndex = 0,
 }: DrawTextCommand): void {
-    queuedText.push({ text, x, y, font, color, align, baseline, zIndex });
+    queuedText.push({ text, x, y, font, color, align, baseline, zIndex, clip: getDrawClip() });
 }
 
 /** Paint text queued by drawText. Lower zIndex is drawn first. */
@@ -44,10 +45,17 @@ export function renderText(): void {
 
     const context = getCanvasContext();
     for (const draw of draws) {
+        context.save();
+        if (draw.clip) {
+            context.beginPath();
+            context.rect(draw.clip.x, draw.clip.y, draw.clip.width, draw.clip.height);
+            context.clip();
+        }
         context.font = draw.font;
         context.fillStyle = draw.color;
         context.textAlign = draw.align;
         context.textBaseline = draw.baseline;
         context.fillText(draw.text, draw.x, draw.y);
+        context.restore();
     }
 }

@@ -1,4 +1,4 @@
-import { getCanvasContext } from "./canvas";
+import { getCanvasContext, getDrawClip, type DrawClip } from "./canvas";
 
 const spriteModules = import.meta.glob("../../assets/sprites/**/*.{png,jpg,jpeg,webp,gif}", {
     eager: true,
@@ -19,6 +19,7 @@ type QueuedSprite = {
     rotationRad: number;
     alpha: number;
     color?: string;
+    clip: DrawClip | null;
 };
 
 let tintCanvas: HTMLCanvasElement | null = null;
@@ -71,7 +72,18 @@ export function drawSprite({
     alpha = 1,
     color,
 }: DrawCommand) {
-    queuedSprites.push({ sprite, x, y, zIndex, scaleX, scaleY, rotationRad, alpha, color });
+    queuedSprites.push({
+        sprite,
+        x,
+        y,
+        zIndex,
+        scaleX,
+        scaleY,
+        rotationRad,
+        alpha,
+        color,
+        clip: getDrawClip(),
+    });
 }
 
 /** Paint sprites queued by drawSprite. Lower zIndex is drawn first. */
@@ -93,6 +105,11 @@ export function renderSprites(): void {
 
         // draw the sprite centered on x, y
         context.save();
+        if (draw.clip) {
+            context.beginPath();
+            context.rect(draw.clip.x, draw.clip.y, draw.clip.width, draw.clip.height);
+            context.clip();
+        }
         context.translate(draw.x, draw.y);
         context.rotate(draw.rotationRad);
         context.scale(draw.scaleX, draw.scaleY);
