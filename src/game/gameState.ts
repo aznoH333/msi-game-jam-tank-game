@@ -1,3 +1,4 @@
+import { GameDirector, initGameDirector } from "../gamedirector/gamedirector";
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
 import { mainMenuUpdate } from "./mainMenu";
@@ -9,6 +10,7 @@ export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN";
 export interface GameState {
     currentScreen: GameScreen;
     playerData: PlayerData;
+    gameDirector: GameDirector;
 };
 
 
@@ -19,6 +21,7 @@ export function initGame(): GameState {
     return {
         currentScreen: "BUILDING_SCREEN",
         playerData: initPlayerData(),
+        gameDirector: initGameDirector(),
     };
 }
 
@@ -53,3 +56,7 @@ export function updateGame(state: GameState) {
     }
 }
 
+export function switchGameState(newState: GameScreen) {
+    const state = getGameState();
+    state.currentScreen = newState;
+}

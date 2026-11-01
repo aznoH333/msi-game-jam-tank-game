@@ -1,5 +1,5 @@
 import type { BaseTurret, WeaponOverclockInstance } from "./types/tiles";
-import { BaseVehicle } from "./types/vehicles";
+import { BaseVehicle } from "./types/vehicle";
 
 export interface TurretCombatStats {
     damagePerShot: number;

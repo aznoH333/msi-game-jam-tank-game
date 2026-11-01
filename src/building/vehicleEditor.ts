@@ -2,6 +2,7 @@ import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../d
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
+import { transitionToNextEvent } from "../gamedirector/gamedirector";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
@@ -52,6 +53,15 @@ function vehicleGridGeometry(): GridGeometry {
 
 function hits(bounds: Bounds, x: number, y: number): boolean {
     return x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.width && y < bounds.y + bounds.height;
+}
+
+function goButtonBounds(paneWidth: number): Bounds {
+    return {
+        x: SIDEBAR_WIDTH + paneWidth - 140,
+        y: GAME_HEIGHT - 76,
+        width: 120,
+        height: 52,
+    };
 }
 
 function cellAt(grid: GridGeometry, x: number, y: number): { x: number; y: number } | null {
@@ -185,6 +195,10 @@ export function updateVehicleEditor(state: GameState): void {
     const hover = cellAt(grid, mouse.x, mouse.y);
     const leftDown = isMouseButtonDown(0);
     const leftPressed = leftDown && !editorLeftWasDown;
+    const goButton = goButtonBounds(paneWidth);
+    if (leftPressed && hits(goButton, mouse.x, mouse.y)) {
+        transitionToNextEvent();
+    }
     if (
         selectedOverclockTile
         && !state.playerData.vehicle.tiles.includes(selectedOverclockTile)
@@ -270,7 +284,7 @@ export function updateVehicleEditor(state: GameState): void {
             }
 
             // hold left button to paint the tile centered on the cursor
-            if (!overSidebar && hover && selectedTile) {
+            if (!overSidebar && !hits(goButton, mouse.x, mouse.y) && hover && selectedTile) {
                 const tileToPlace: BaseTile = selectedTile;
                 const origin = placementOrigin(grid, mouse.x, mouse.y, tileToPlace);
                 const insideGrid = origin.x >= 0
@@ -439,4 +453,23 @@ export function updateVehicleEditor(state: GameState): void {
         state.playerData.money,
         selectedTab === "OVERCLOCK" ? selectedOverclockTile : undefined,
     );
+
+    // start the next event
+    const launch = goButtonBounds(paneWidth);
+    drawRect({
+        x: launch.x,
+        y: launch.y,
+        width: launch.width,
+        height: launch.height,
+        color: "#2f9e44",
+    });
+    drawText({
+        text: "GO",
+        x: launch.x + launch.width / 2,
+        y: launch.y + launch.height / 2,
+        font: "22px sans-serif",
+        color: "#f4fff6",
+        align: "center",
+        baseline: "middle",
+    });
 }

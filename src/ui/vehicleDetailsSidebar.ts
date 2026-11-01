@@ -1,6 +1,6 @@
 import { getOverclockedTurretStats, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "../building/types/tiles";
-import type { BaseVehicle } from "../building/types/vehicles";
+import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText, measureText } from "../drawing/text";

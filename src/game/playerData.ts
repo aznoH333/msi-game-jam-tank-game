@@ -1,4 +1,4 @@
-import { BaseVehicle } from "../building/types/vehicles";
+import { BaseVehicle } from "../building/types/vehicle";
 
 export interface PlayerData {
     vehicle: BaseVehicle;

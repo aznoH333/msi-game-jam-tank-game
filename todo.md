@@ -25,10 +25,14 @@
 - [X] Generators and batteries
 - [X] New sidebar on the right displaying vehicle information
 - [X] Display selected tile info on the right
-
-
 - [X] wire name into the vehicle detail bar
 - [X] add turret statistics
 - [X] add overclock menu
 - [X] add overclock sliders
 - [X] add currency and prices
+
+
+
+- [ ] Setup gameplay instance types
+- [ ] Add game director
+- [ ] Setup battle screen

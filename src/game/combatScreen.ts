@@ -1,3 +1,5 @@
+import { updateCombat } from "../combat/combat";
+
 export function combatScreenUpdate() {
-    // TODO
+    updateCombat();
 }
