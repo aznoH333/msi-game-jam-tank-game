@@ -9,6 +9,7 @@ import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "./types/tiles";
+import type { BaseVehicle } from "./types/vehicle";
 
 const GRID_COLUMNS = 32;
 const GRID_ROWS = 32;
@@ -17,6 +18,8 @@ const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 2.5;
 const CAMERA_MARGIN_CELLS = 12;
 const CAMERA_SLACK_CELLS = 2;
+const CHEAT_NAME = "bingulus fungulus";
+const CHEAT_MONEY = 100_000_000;
 
 interface GridGeometry {
     x: number;
@@ -39,6 +42,7 @@ let panning = false;
 let middleWasDown = false;
 let panX = 0;
 let panY = 0;
+let cheatGranted = false;
 
 function vehicleGridGeometry(): GridGeometry {
     const cell = CELL_SIZE_PX * zoom;
@@ -62,6 +66,24 @@ function goButtonBounds(paneWidth: number): Bounds {
         width: 120,
         height: 52,
     };
+}
+
+function copyButtonBounds(paneWidth: number): Bounds {
+    return {
+        x: SIDEBAR_WIDTH + paneWidth - 140,
+        y: 48,
+        width: 120,
+        height: 40,
+    };
+}
+
+function copyVehicleJson(vehicle: BaseVehicle): void {
+    const json = JSON.stringify(vehicle);
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+        return;
+    }
+    void clipboard.writeText(json);
 }
 
 function cellAt(grid: GridGeometry, x: number, y: number): { x: number; y: number } | null {
@@ -123,6 +145,11 @@ export function updateVehicleEditor(state: GameState): void {
     const paneHeight = GAME_HEIGHT;
     const overVehicle = mouse.x >= SIDEBAR_WIDTH && mouse.x < GAME_WIDTH - DETAILS_SIDEBAR_WIDTH && mouse.y >= 0;
     updateVehicleNameInput(state.playerData.vehicle);
+    const cheatEnabled = state.playerData.vehicle.name === CHEAT_NAME;
+    if (cheatEnabled && !cheatGranted) {
+        state.playerData.money = CHEAT_MONEY;
+    }
+    cheatGranted = cheatEnabled;
 
     // start centered on the build grid
     if (!cameraCentered) {
@@ -196,8 +223,13 @@ export function updateVehicleEditor(state: GameState): void {
     const leftDown = isMouseButtonDown(0);
     const leftPressed = leftDown && !editorLeftWasDown;
     const goButton = goButtonBounds(paneWidth);
+    const copyButton = copyButtonBounds(paneWidth);
     if (leftPressed && hits(goButton, mouse.x, mouse.y)) {
         transitionToNextEvent();
+    }
+    const copyClicked = cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
+    if (copyClicked) {
+        copyVehicleJson(state.playerData.vehicle);
     }
     if (
         selectedOverclockTile
@@ -219,7 +251,7 @@ export function updateVehicleEditor(state: GameState): void {
             state.playerData.money += removed.base.price;
             state.playerData.vehicle.tiles.splice(index, 1);
         }
-    } else if (!panning && leftDown) {
+    } else if (!panning && leftDown && !copyClicked) {
         let overSidebar = false;
 
         // switch sidebar tab
@@ -469,6 +501,35 @@ export function updateVehicleEditor(state: GameState): void {
         y: launch.y + launch.height / 2,
         font: "22px sans-serif",
         color: "#f4fff6",
+        align: "center",
+        baseline: "middle",
+    });
+
+    if (!cheatEnabled) {
+        return;
+    }
+    drawText({
+        text: "cheat mode enabled",
+        x: SIDEBAR_WIDTH + paneWidth - 16,
+        y: 24,
+        font: "18px sans-serif",
+        color: "#ff5c5c",
+        align: "right",
+        baseline: "middle",
+    });
+    drawRect({
+        x: copyButton.x,
+        y: copyButton.y,
+        width: copyButton.width,
+        height: copyButton.height,
+        color: "#8f2d2d",
+    });
+    drawText({
+        text: "Copy",
+        x: copyButton.x + copyButton.width / 2,
+        y: copyButton.y + copyButton.height / 2,
+        font: "18px sans-serif",
+        color: "#fff4f4",
         align: "center",
         baseline: "middle",
     });

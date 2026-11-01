@@ -5,6 +5,7 @@ import { drawRect, GAME_HEIGHT, GAME_WIDTH, getDrawClip, setDrawClip } from "../
 import { drawText } from "../drawing/text";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { getGameState } from "../game/gameState";
+import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
 import { loseCombat, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout, drawHealthBar, layoutAbilityButtons } from "./abilityBar";
@@ -25,6 +26,8 @@ import type { VehicleInstance } from "./types/vehicleInstance";
 
 const PROJECTILE_SPRITE = "combat/debug_projectile";
 const EXPLOSION_SPRITE = "combat/debug_explosion";
+const ENEMY_ACTION_MIN = 1;
+const ENEMY_ACTION_MAX = 2;
 
 type CombatControl = "PLAYER" | "ENEMY";
 
@@ -79,6 +82,7 @@ let leftWasDown = false;
 let lastUpdateMs = 0;
 let projectiles: Projectile[] = [];
 let explosions: Explosion[] = [];
+let enemyActionDelay = 0;
 
 function gunsOf(instance: VehicleInstance): TileInstance[] {
     return instance.tiles.filter((part) => part.tile.base.turret !== undefined);
@@ -143,6 +147,104 @@ function createCombatant(vehicle: BaseVehicle, control: CombatControl): Combatan
             targetY: 0,
         })),
     };
+}
+
+function randomEnemyDelay(): number {
+    return ENEMY_ACTION_MIN + Math.random() * (ENEMY_ACTION_MAX - ENEMY_ACTION_MIN);
+}
+
+/** After the wait, fire one ready gun at a random living tile. Otherwise wait again. */
+function enemyCombatInput(
+    attacker: Combatant,
+    targetTank: Combatant,
+    targetCamera: CombatCamera | null,
+    dt: number,
+): CombatInput | null {
+    enemyActionDelay -= dt;
+    if (enemyActionDelay > 0) {
+        return null;
+    }
+    enemyActionDelay = randomEnemyDelay();
+    if (!targetCamera) {
+        return null;
+    }
+
+    const guns = gunsOf(attacker.instance);
+    const ready: number[] = [];
+    for (let index = 0; index < guns.length; index++) {
+        const gun = guns[index];
+        const runtime = attacker.guns[index];
+        const turret = gun.tile.base.turret;
+        if (!turret || gun.health <= 0 || runtime.shotsLeft > 0 || runtime.cooldown > 0) {
+            continue;
+        }
+        const stats = getOverclockedTurretStats(turret, gun.tile.overclocks);
+        const count = Math.max(0, Math.round(stats.salvoCount));
+        const cost = Math.max(0, stats.powerPerShot);
+        if (count > 0 && attacker.instance.power >= cost) {
+            ready.push(index);
+        }
+    }
+    const livingTiles = targetTank.instance.tiles.filter((part) => part.health > 0);
+    if (ready.length === 0 || livingTiles.length === 0) {
+        return null;
+    }
+
+    const gunIndex = ready[Math.floor(Math.random() * ready.length)];
+    const part = livingTiles[Math.floor(Math.random() * livingTiles.length)];
+    return {
+        chosenAbility: gunIndex,
+        target: tileToWorld(
+            targetCamera,
+            part.tile.x,
+            part.tile.y,
+            part.tile.base.width,
+            part.tile.base.height,
+        ),
+    };
+}
+
+/** Point each gun that has an aim point along the world direction to it. */
+function turretAimRotations(
+    combatant: Combatant,
+    camera: CombatCamera | null,
+    hover: { x: number; y: number } | null,
+): number[] {
+    const rotations = combatant.instance.tiles.map(() => 0);
+    if (!camera) {
+        return rotations;
+    }
+    const guns = gunsOf(combatant.instance);
+    for (let index = 0; index < guns.length; index++) {
+        const runtime = combatant.guns[index];
+        const gun = guns[index];
+        if (gun.health <= 0) {
+            continue;
+        }
+        let aim: { x: number; y: number } | null = null;
+        if (runtime.shotsLeft > 0) {
+            aim = { x: runtime.targetX, y: runtime.targetY };
+        } else if (index === combatant.selectedAbility && hover) {
+            aim = hover;
+        } else if (runtime.hasTarget) {
+            aim = { x: runtime.targetX, y: runtime.targetY };
+        }
+        if (!aim) {
+            continue;
+        }
+        const origin = tileToWorld(
+            camera,
+            gun.tile.x,
+            gun.tile.y,
+            gun.tile.base.width,
+            gun.tile.base.height,
+        );
+        const tileIndex = combatant.instance.tiles.indexOf(gun);
+        if (tileIndex >= 0) {
+            rotations[tileIndex] = aimRotation(aim.x - origin.x, aim.y - origin.y, camera.inverted);
+        }
+    }
+    return rotations;
 }
 
 /** Draw a projectile if this camera can currently see it. */
@@ -482,10 +584,11 @@ export function updateCombat(): void {
     if (!player || !enemy || encounterEvent !== state.gameDirector.eventIndex) {
         encounterEvent = state.gameDirector.eventIndex;
         player = createCombatant(state.playerData.vehicle, "PLAYER");
-        enemy = createCombatant(state.playerData.vehicle, "ENEMY");
+        enemy = createCombatant(pickEnemyVehicle(encounterEvent), "ENEMY");
         projectiles = [];
         explosions = [];
         combatResult = null;
+        enemyActionDelay = randomEnemyDelay();
         lastUpdateMs = performance.now();
     }
 
@@ -534,41 +637,13 @@ export function updateCombat(): void {
     }
 
     updateCombatant(player, dt, { chosenAbility, target }, playerCamera);
-    updateCombatant(enemy, dt, null, enemyCamera);
+    const enemyInput = fightOver || !enemyCamera
+        ? null
+        : enemyCombatInput(enemy, player, playerCamera, dt);
+    updateCombatant(enemy, dt, enemyInput, enemyCamera);
 
-    // point each active gun along the world direction to its aim point
-    const turretRotations = player.instance.tiles.map(() => 0);
-    if (playerCamera) {
-        for (let index = 0; index < guns.length; index++) {
-            const runtime = player.guns[index];
-            const gun = guns[index];
-            if (gun.health <= 0) {
-                continue;
-            }
-            let aim: { x: number; y: number } | null = null;
-            if (runtime.shotsLeft > 0) {
-                aim = { x: runtime.targetX, y: runtime.targetY };
-            } else if (index === player.selectedAbility && mouseWorld) {
-                aim = mouseWorld;
-            } else if (runtime.hasTarget) {
-                aim = { x: runtime.targetX, y: runtime.targetY };
-            }
-            if (!aim) {
-                continue;
-            }
-            const origin = tileToWorld(
-                playerCamera,
-                gun.tile.x,
-                gun.tile.y,
-                gun.tile.base.width,
-                gun.tile.base.height,
-            );
-            const tileIndex = player.instance.tiles.indexOf(gun);
-            if (tileIndex >= 0) {
-                turretRotations[tileIndex] = aimRotation(aim.x - origin.x, aim.y - origin.y, false);
-            }
-        }
-    }
+    const turretRotations = turretAimRotations(player, playerCamera, mouseWorld);
+    const enemyRotations = turretAimRotations(enemy, enemyCamera, null);
 
     // move each shot through world space and show it only on a camera that can see it
     const projectileScale = (playerLayout?.cell ?? 48) / TILE_SIZE_PX * 0.5;
@@ -631,7 +706,7 @@ export function updateCombat(): void {
         }
     }
 
-    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemy.instance.tiles.map(() => 0));
+    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemyRotations);
     drawCombatVehicle(player.instance, playerView, player.instance.base.name, false, turretRotations);
     drawRect({
         x: ABILITY_BAR_WIDTH,
