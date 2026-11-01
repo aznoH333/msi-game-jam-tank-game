@@ -72,6 +72,41 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 ]
             }
         },
+        {
+            tileName: "Debug mini mortar",
+            type: "WEAPON",
+            tileSprite: "tiles/debug_turret_base",
+            width: 2,
+            height: 2,
+            price: 10_000,
+            health: 100,
+            explosionDamage: 20,
+            explosionRadius: 2.5,
+            turret: {
+                turretSprite: "tiles/debug_turret", 
+                accuracy: 4,
+                damagePerShot: 2,
+                powerPerShot: 1,
+                salvoCount: 30,
+                salvoDelay: 0.02,
+                reloadTime: 3.5,
+                explosionRadius: 3,
+                projectileSpeed: 40,
+                projectileType: "mortar",
+
+                overClocks: [
+                    {
+                        name: "Damage overclock",
+                        baseValue: 0,
+                        minValue: -0.5,
+                        maxValue: 1,
+                        stepSize: 0.25,
+                        damage: 1.1,
+                        powerCost: 1.2,
+                    },
+                ]
+            }
+        },
     ],
     "UTILITY": [
         {

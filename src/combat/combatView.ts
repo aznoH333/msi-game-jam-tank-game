@@ -1,6 +1,6 @@
 import { TILE_SIZE_PX } from "../building/types/tiles";
 import { COMBAT_CAMERA_ZOOM } from "./constants";
-import { drawRect, strokeRect } from "../drawing/canvas";
+import { drawRect, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { VehicleInstance } from "./types/vehicleInstance";
@@ -171,6 +171,7 @@ export function drawCombatVehicle(
     inverted: boolean,
     turretRotations: readonly number[],
 ): void {
+    setDrawClip(null);
     drawRect({
         x: view.x,
         y: view.y,

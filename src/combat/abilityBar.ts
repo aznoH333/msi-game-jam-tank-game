@@ -1,3 +1,4 @@
+import { DEFEAT_HEALTH_RATIO } from "./constants";
 import type { TileInstance } from "./types/tileInstance";
 import { TILE_SIZE_PX } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
@@ -134,6 +135,54 @@ export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, co
             });
         }
     }
+}
+
+/** Remaining health as a share of the vehicle's total hit points. The mark is the loss line. */
+export function drawHealthBar(x: number, y: number, width: number, ratio: number): void {
+    const shown = Math.max(0, Math.min(1, ratio));
+    drawText({
+        text: "HP",
+        x,
+        y,
+        font: "16px sans-serif",
+        color: "#d7d5cf",
+        align: "left",
+        baseline: "middle",
+    });
+    drawText({
+        text: `${Math.floor(shown * 100)}%`,
+        x: x + width,
+        y,
+        font: "16px sans-serif",
+        color: "#eceae4",
+        align: "right",
+        baseline: "middle",
+    });
+    const barY = y + 16;
+    const barHeight = 10;
+    drawRect({
+        x,
+        y: barY,
+        width,
+        height: barHeight,
+        color: "#141820",
+    });
+    if (shown > 0) {
+        drawRect({
+            x,
+            y: barY,
+            width: Math.max(1, width * shown),
+            height: barHeight,
+            color: shown < DEFEAT_HEALTH_RATIO ? "#d35b4a" : "#3fbe6e",
+        });
+    }
+    drawRect({
+        x: x + width * DEFEAT_HEALTH_RATIO,
+        y: barY,
+        width: 2,
+        height: barHeight,
+        color: "#e6c07b",
+    });
 }
 
 /** Stored energy, its cap, and how fast living generators refill it. */

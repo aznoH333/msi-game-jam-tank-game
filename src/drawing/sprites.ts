@@ -94,6 +94,10 @@ export function getSpriteSize(sprite: string): { width: number; height: number }
     return { width: image.width, height: image.height };
 }
 
+export function getSpriteImage(sprite: string): HTMLImageElement | null {
+    return loadedSprites.get(sprite) ?? null;
+}
+
 /** Paint sprites queued by drawSprite. Lower zIndex is drawn first. */
 export function renderSprites(): void {
     const draws = queuedSprites.splice(0);

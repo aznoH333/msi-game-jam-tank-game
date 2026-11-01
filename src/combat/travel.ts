@@ -1,0 +1,248 @@
+import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
+import type { BaseVehicle } from "../building/types/vehicle";
+import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
+import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
+import { drawText } from "../drawing/text";
+import { getGameState } from "../game/gameState";
+import { getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
+import { getMousePosition, isMouseButtonDown } from "../input/input";
+import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout } from "./abilityBar";
+import { drawCombatVehicle } from "./combatView";
+import type { VehicleInstance } from "./types/vehicleInstance";
+
+const DRIVE_SPEED = 11;
+/** Seconds to speed up from a stop, and to slow down again before the sprite. */
+const RAMP_TIME = 0.5;
+const CAMERA_HEIGHT = 1.5;
+/** Quadratic drop. The ground falls out of sight near sqrt(CAMERA_HEIGHT / STREET_CURVE). */
+const STREET_CURVE = 0.004;
+const BLOCK_DEPTH = 7;
+const STREET_HALF = 6.2;
+/** World z of the event sprite the tank drives up to. Far enough that the drive lasts a while before it crests the horizon. */
+const BILLBOARD_Z = 120;
+/** How far in front of the sprite the camera stops. */
+const STOP_AHEAD = 10;
+const EVENT_WIDTH = 6;
+const EVENT_HEIGHT = 4.6;
+const EVENT_CENTER_Y = 3.4;
+const EVENT_SPRITE = "world/events/debug_event";
+const BUILDING_COLORS = ["#8d939c", "#6e757f", "#a7adb6", "#5c636c"];
+
+let travelEvent = -1;
+let travelTime = 0;
+let lastUpdateMs = 0;
+let travelLeftWasDown = false;
+
+/** Combat layout with a first-person street in place of the enemy tank. */
+export function updateTravel(): void {
+    const state = getGameState();
+    const now = performance.now();
+    if (travelEvent !== state.gameDirector.eventIndex) {
+        travelEvent = state.gameDirector.eventIndex;
+        travelTime = 0;
+        lastUpdateMs = now;
+        travelLeftWasDown = isMouseButtonDown(0);
+    }
+    const dt = Math.min(0.05, Math.max(0, (now - lastUpdateMs) / 1000));
+    lastUpdateMs = now;
+    travelTime += dt;
+
+    const viewWidth = GAME_WIDTH - ABILITY_BAR_WIDTH;
+    const viewHeight = GAME_HEIGHT / 2;
+    const cityView = { x: ABILITY_BAR_WIDTH, y: 0, width: viewWidth, height: viewHeight };
+    const playerView = { x: ABILITY_BAR_WIDTH, y: viewHeight, width: viewWidth, height: viewHeight };
+    const stopZ = BILLBOARD_Z - STOP_AHEAD;
+    const cameraZ = driveDistance(travelTime, stopZ);
+    const stopped = cameraZ >= stopZ - 0.001;
+    const nextEvent = getNextEventType();
+    drawScene3D({
+        viewport: cityView,
+        background: "#171d28",
+        camera: {
+            position: { x: 0, y: CAMERA_HEIGHT, z: cameraZ },
+            yaw: 0,
+            pitch: -0.06,
+            fov: Math.PI / 3,
+        },
+        triangles: streetTriangles(cameraZ),
+        billboards: [eventBillboard(cameraZ)],
+    });
+    drawText({
+        text: "Travel",
+        x: cityView.x + 24,
+        y: cityView.y + 28,
+        font: "20px sans-serif",
+        color: "#d7d5cf",
+        align: "left",
+        baseline: "middle",
+    });
+
+    const vehicle = presentationVehicle(state.playerData.vehicle);
+    drawCombatVehicle(vehicle, playerView, vehicle.base.name, false, vehicle.tiles.map(() => 0));
+    drawRect({
+        x: ABILITY_BAR_WIDTH,
+        y: viewHeight - 1,
+        width: viewWidth,
+        height: 2,
+        color: "#2e3546",
+    });
+
+    const guns = vehicle.tiles.filter((part) => part.tile.base.turret !== undefined);
+    drawAbilityBar(guns, -1, guns.map(() => 0));
+    drawEnergyReadout(
+        16,
+        GAME_HEIGHT - 72,
+        ABILITY_BAR_WIDTH - 32,
+        vehicle.power,
+        getTotalPowerCapacity(vehicle.base),
+        getPowerPerSecond(vehicle.base),
+    );
+
+    const mouse = getMousePosition();
+    const leftDown = isMouseButtonDown(0);
+    const leftPressed = leftDown && !travelLeftWasDown;
+    travelLeftWasDown = leftDown;
+    if (!stopped) {
+        return;
+    }
+    const button = travelButtonBounds(cityView.x, cityView.width, viewHeight);
+    if (
+        leftPressed
+        && mouse.x >= button.x
+        && mouse.y >= button.y
+        && mouse.x < button.x + button.width
+        && mouse.y < button.y + button.height
+    ) {
+        transitionToNextEvent();
+        return;
+    }
+    drawRect({
+        x: button.x,
+        y: button.y,
+        width: button.width,
+        height: button.height,
+        color: "#2f9e44",
+    });
+    drawText({
+        text: travelButtonLabel(nextEvent),
+        x: button.x + button.width / 2,
+        y: button.y + button.height / 2,
+        font: "22px sans-serif",
+        color: "#f4fff6",
+        align: "center",
+        baseline: "middle",
+    });
+}
+
+function travelButtonBounds(viewX: number, viewWidth: number, viewHeight: number): { x: number; y: number; width: number; height: number } {
+    const width = 180;
+    const height = 52;
+    return {
+        x: viewX + viewWidth / 2 - width / 2,
+        y: viewHeight - 78,
+        width,
+        height,
+    };
+}
+
+function travelButtonLabel(next: EventType): string {
+    if (next === "SHOP") {
+        return "Shop";
+    }
+    if (next === "COMBAT") {
+        return "Fight";
+    }
+    return "Continue";
+}
+
+/** Speed up, hold DRIVE_SPEED, then slow to a stop exactly at `distance`. */
+function driveDistance(elapsed: number, distance: number): number {
+    const fullRamp = DRIVE_SPEED * RAMP_TIME / 2;
+    const peak = distance < fullRamp * 2 ? distance / RAMP_TIME : DRIVE_SPEED;
+    const rampDistance = peak * RAMP_TIME / 2;
+    const cruiseTime = peak <= 0 ? 0 : Math.max(0, distance - rampDistance * 2) / peak;
+    if (elapsed <= 0) {
+        return 0;
+    }
+    if (elapsed < RAMP_TIME) {
+        return peak * elapsed * elapsed / (2 * RAMP_TIME);
+    }
+    if (elapsed < RAMP_TIME + cruiseTime) {
+        return rampDistance + peak * (elapsed - RAMP_TIME);
+    }
+    const decelTime = elapsed - RAMP_TIME - cruiseTime;
+    if (decelTime >= RAMP_TIME) {
+        return distance;
+    }
+    return distance - rampDistance + peak * decelTime * (1 - decelTime / (2 * RAMP_TIME));
+}
+
+function eventBillboard(cameraZ: number): Billboard3D {
+    return {
+        position: bend({ x: 0, y: EVENT_CENTER_Y, z: BILLBOARD_Z }, cameraZ),
+        width: EVENT_WIDTH,
+        height: EVENT_HEIGHT,
+        sprite: EVENT_SPRITE,
+    };
+}
+
+function presentationVehicle(vehicle: BaseVehicle): VehicleInstance {
+    return {
+        base: vehicle,
+        tiles: vehicle.tiles.map((tile) => ({
+            tile,
+            health: tile.base.health,
+        })),
+        power: getTotalPowerCapacity(vehicle),
+    };
+}
+
+function streetTriangles(cameraZ: number): Triangle3D[] {
+    const triangles: Triangle3D[] = [];
+    const horizon = Math.sqrt(CAMERA_HEIGHT / STREET_CURVE);
+    const stripDepth = 1.6;
+    for (let ahead = 0.4; ahead < horizon * 1.35; ahead += stripDepth) {
+        triangles.push(...planeTriangles(
+            { x: 0, y: 0, z: cameraZ + ahead + stripDepth / 2 },
+            64,
+            stripDepth,
+            "#3c4452",
+        ));
+    }
+
+    const first = Math.floor((cameraZ - BLOCK_DEPTH) / BLOCK_DEPTH);
+    const last = Math.ceil((cameraZ + horizon * 3.5) / BLOCK_DEPTH);
+    for (let index = first; index <= last; index++) {
+        const z = index * BLOCK_DEPTH + BLOCK_DEPTH / 2;
+        pushBuilding(triangles, index * 13 + 7, -1, z);
+        pushBuilding(triangles, index * 13 + 19, 1, z);
+    }
+    return bendTriangles(triangles, cameraZ);
+}
+
+/** Each row is one solid run of blocks. Depth matches the step, so neighboring faces meet. */
+function pushBuilding(triangles: Triangle3D[], seed: number, side: number, z: number): void {
+    const variety = Math.abs(seed);
+    const height = 2.2 + (variety % 6) * 1.35;
+    const thickness = 4.2 + (variety % 4) * 1.1;
+    triangles.push(...boxTriangles(
+        { x: side * (STREET_HALF + thickness / 2), y: height / 2, z },
+        { x: thickness, y: height, z: BLOCK_DEPTH },
+        BUILDING_COLORS[variety % BUILDING_COLORS.length],
+    ));
+}
+
+/** Drop the world by distance ahead of the camera, steep enough that far blocks sink past the horizon. */
+function bendTriangles(triangles: Triangle3D[], cameraZ: number): Triangle3D[] {
+    return triangles.map((triangle) => ({
+        a: bend(triangle.a, cameraZ),
+        b: bend(triangle.b, cameraZ),
+        c: bend(triangle.c, cameraZ),
+        color: triangle.color,
+    }));
+}
+
+function bend(point: Vec3, cameraZ: number): Vec3 {
+    const ahead = point.z - cameraZ;
+    return { x: point.x, y: point.y - STREET_CURVE * ahead * ahead, z: point.z };
+}

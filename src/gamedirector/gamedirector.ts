@@ -5,7 +5,9 @@ import { getGameState, switchGameState } from "../game/gameState";
  * 
  * Based on this number the game director decides what should be the next event
  */
-export type EventType = "SHOP" | "COMBAT";
+export type EventType = "SHOP" | "TRAVEL" | "COMBAT";
+
+const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL"];
 
 
 
@@ -26,22 +28,19 @@ export function initGameDirector(): GameDirector {
 
 
 
+/** The player lost a fight. Put them back at the shop that started this loop. */
+export function loseCombat(): void {
+    const director = getGameState().gameDirector;
+    director.eventIndex = Math.floor(director.eventIndex / EVENT_LOOP.length) * EVENT_LOOP.length;
+    director.currentEventType = "SHOP";
+    switchGameState("BUILDING_SCREEN");
+}
+
 export function transitionToNextEvent() {
     const director = getGameState().gameDirector;
 
     director.eventIndex++;
-
-
-    // get next event
-    let nextEventType: EventType;
-
-    if (director.eventIndex % 4 == 0) { // this is placeholder logic. Right now its just an infinite loop or shop->combat->combat->combat->repeat
-        nextEventType = "SHOP";
-    } else {
-        nextEventType = "COMBAT";
-    }
-
-
+    const nextEventType = getEventTypeForIndex(director.eventIndex);
     director.currentEventType = nextEventType;
 
     // switch scene to match
@@ -50,4 +49,13 @@ export function transitionToNextEvent() {
     } else {
         switchGameState("COMBAT_SCREEN");
     }
+}
+
+export function getEventTypeForIndex(eventIndex: number): EventType {
+    return EVENT_LOOP[eventIndex % EVENT_LOOP.length];
+}
+
+/** The event that follows the current one. Does not advance the director. */
+export function getNextEventType(): EventType {
+    return getEventTypeForIndex(getGameState().gameDirector.eventIndex + 1);
 }

@@ -1,4 +1,5 @@
 import { clearCanvas, fitCanvasToView, initCanvas, renderRects } from "./drawing/canvas";
+import { render3D } from "./drawing/3d";
 import { loadSprites, renderSprites } from "./drawing/sprites";
 import { renderText } from "./drawing/text";
 import { getGameState, updateGame } from "./game/gameState";
@@ -11,6 +12,7 @@ function loop(): void {
     fitCanvasToView();
     clearCanvas();
     updateGame(getGameState());
+    render3D();
     renderRects();
     renderSprites();
     renderText();

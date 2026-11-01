@@ -33,6 +33,6 @@
 
 
 
-- [ ] Setup gameplay instance types
-- [ ] Add game director
-- [ ] Setup battle screen
+- [X] Setup gameplay instance types
+- [X] Add game director
+- [X] Setup battle screen

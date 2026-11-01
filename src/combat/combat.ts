@@ -1,12 +1,14 @@
 import { TILE_SIZE_PX, type ProjectileType } from "../building/types/tiles";
 import { getOverclockedTurretStats, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
-import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip } from "../drawing/canvas";
+import { drawRect, GAME_HEIGHT, GAME_WIDTH, getDrawClip, setDrawClip } from "../drawing/canvas";
+import { drawText } from "../drawing/text";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { getGameState } from "../game/gameState";
+import { loseCombat, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
-import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout, layoutAbilityButtons } from "./abilityBar";
-import { DIRECT_MISS_DISTANCE, EXPLOSION_DURATION, TANK_SEPARATION } from "./constants";
+import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout, drawHealthBar, layoutAbilityButtons } from "./abilityBar";
+import { DEFEAT_EXPLOSION_RADIUS, DEFEAT_HEALTH_RATIO, DIRECT_MISS_DISTANCE, EXPLOSION_DURATION, TANK_SEPARATION } from "./constants";
 import {
     aimRotation,
     drawCombatVehicle,
@@ -72,6 +74,7 @@ interface CombatInput {
 let encounterEvent = -1;
 let player: Combatant | null = null;
 let enemy: Combatant | null = null;
+let combatResult: "victory" | "defeat" | null = null;
 let leftWasDown = false;
 let lastUpdateMs = 0;
 let projectiles: Projectile[] = [];
@@ -96,6 +99,20 @@ function energyBudget(instance: VehicleInstance): { capacity: number; generation
         capacity: Math.max(0, capacity),
         generation: Math.max(0, generation),
     };
+}
+
+/** Share of hit points still left. Null when the vehicle has no hit points to lose. */
+function healthRatio(instance: VehicleInstance): number | null {
+    let current = 0;
+    let max = 0;
+    for (const part of instance.tiles) {
+        max += part.tile.base.health;
+        current += Math.max(0, part.health);
+    }
+    if (max <= 0) {
+        return null;
+    }
+    return current / max;
 }
 
 function rechargeEnergy(instance: VehicleInstance, dt: number): void {
@@ -147,6 +164,7 @@ function drawWorldProjectile(
     ) {
         return;
     }
+    const previousClip = getDrawClip();
     setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
     drawSprite({
         sprite: PROJECTILE_SPRITE,
@@ -157,6 +175,7 @@ function drawWorldProjectile(
         rotationRad: aimRotation(worldDx, worldDy, false),
         zIndex: 5,
     });
+    setDrawClip(previousClip);
 }
 
 /** Draw a landing burst if this camera can see it. Scale and opacity follow the same progress. */
@@ -177,6 +196,7 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
     ) {
         return;
     }
+    const previousClip = getDrawClip();
     setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
     drawSprite({
         sprite: EXPLOSION_SPRITE,
@@ -187,6 +207,7 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
         alpha: 1 - growth,
         zIndex: 6,
     });
+    setDrawClip(previousClip);
 }
 
 /** Player and enemy share this update. Only the supplied input can start a shot. */
@@ -367,6 +388,25 @@ function earliestTileHit(
     return best;
 }
 
+/** Wipe whatever is left of a beaten tank and burst it from the center. */
+function destroyDefeatedTank(combatant: Combatant, camera: CombatCamera | null): void {
+    for (const part of combatant.instance.tiles) {
+        part.health = 0;
+    }
+    for (const gun of combatant.guns) {
+        gun.shotsLeft = 0;
+    }
+    if (!camera) {
+        return;
+    }
+    explosions.push({
+        x: camera.worldX,
+        y: camera.worldY,
+        radius: DEFEAT_EXPLOSION_RADIUS,
+        age: 0,
+    });
+}
+
 /** Damage every living tile in range, and let destroyed explosive tiles burst too. */
 function detonate(
     x: number,
@@ -445,9 +485,11 @@ export function updateCombat(): void {
         enemy = createCombatant(state.playerData.vehicle, "ENEMY");
         projectiles = [];
         explosions = [];
+        combatResult = null;
         lastUpdateMs = performance.now();
     }
 
+    const fightOver = combatResult !== null;
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0, (now - lastUpdateMs) / 1000));
     lastUpdateMs = now;
@@ -477,7 +519,7 @@ export function updateCombat(): void {
     const mouseWorld = enemyCamera && mouseOverEnemy ? screenToWorld(enemyCamera, mouse.x, mouse.y) : null;
     let chosenAbility: number | null = null;
     let target: { x: number; y: number } | null = null;
-    if (leftPressed) {
+    if (!fightOver && leftPressed) {
         const hit = layoutAbilityButtons(livingGuns.length).find((button) => {
             return mouse.x >= button.x
                 && mouse.y >= button.y
@@ -528,16 +570,6 @@ export function updateCombat(): void {
         }
     }
 
-    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemy.instance.tiles.map(() => 0));
-    drawCombatVehicle(player.instance, playerView, player.instance.base.name, false, turretRotations);
-    drawRect({
-        x: ABILITY_BAR_WIDTH,
-        y: viewHeight - 1,
-        width: viewWidth,
-        height: 2,
-        color: "#2e3546",
-    });
-
     // move each shot through world space and show it only on a camera that can see it
     const projectileScale = (playerLayout?.cell ?? 48) / TILE_SIZE_PX * 0.5;
     const targets: { combatant: Combatant; camera: CombatCamera }[] = [];
@@ -587,6 +619,28 @@ export function updateCombat(): void {
     }
     projectiles = stillFlying;
 
+    if (!fightOver) {
+        const playerHealthNow = healthRatio(player.instance);
+        const enemyHealthNow = healthRatio(enemy.instance);
+        if (enemyHealthNow !== null && enemyHealthNow < DEFEAT_HEALTH_RATIO) {
+            combatResult = "victory";
+            destroyDefeatedTank(enemy, enemyCamera);
+        } else if (playerHealthNow !== null && playerHealthNow < DEFEAT_HEALTH_RATIO) {
+            combatResult = "defeat";
+            destroyDefeatedTank(player, playerCamera);
+        }
+    }
+
+    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemy.instance.tiles.map(() => 0));
+    drawCombatVehicle(player.instance, playerView, player.instance.base.name, false, turretRotations);
+    drawRect({
+        x: ABILITY_BAR_WIDTH,
+        y: viewHeight - 1,
+        width: viewWidth,
+        height: 2,
+        color: "#2e3546",
+    });
+
     // expand each burst from a speck to its radius while it fades out
     const stillBursting: Explosion[] = [];
     for (const explosion of explosions) {
@@ -634,4 +688,77 @@ export function updateCombat(): void {
         enemyEnergy.capacity,
         enemyEnergy.generation,
     );
+    const playerHealth = healthRatio(player.instance);
+    const enemyHealth = healthRatio(enemy.instance);
+    drawHealthBar(playerView.x + 24, playerView.y + 52, 240, playerHealth ?? 0);
+    drawHealthBar(enemyView.x + 24, enemyView.y + 52, 240, enemyHealth ?? 0);
+
+    if (!combatResult) {
+        return;
+    }
+
+    const panel = resultPanelBounds(viewWidth);
+    drawRect({
+        x: panel.x,
+        y: panel.y,
+        width: panel.width,
+        height: panel.height,
+        color: "#1b1f2a",
+    });
+    drawText({
+        text: combatResult === "victory" ? "Victory" : "Defeat",
+        x: panel.x + panel.width / 2,
+        y: panel.y + 58,
+        font: "42px sans-serif",
+        color: combatResult === "victory" ? "#8ee0a8" : "#f0a198",
+        align: "center",
+        baseline: "middle",
+    });
+    const button = {
+        x: panel.x + panel.width / 2 - 90,
+        y: panel.y + panel.height - 72,
+        width: 180,
+        height: 52,
+    };
+    drawRect({
+        x: button.x,
+        y: button.y,
+        width: button.width,
+        height: button.height,
+        color: "#2f9e44",
+    });
+    drawText({
+        text: "Proceed",
+        x: button.x + button.width / 2,
+        y: button.y + button.height / 2,
+        font: "22px sans-serif",
+        color: "#f4fff6",
+        align: "center",
+        baseline: "middle",
+    });
+    if (
+        fightOver
+        && leftPressed
+        && mouse.x >= button.x
+        && mouse.y >= button.y
+        && mouse.x < button.x + button.width
+        && mouse.y < button.y + button.height
+    ) {
+        if (combatResult === "victory") {
+            transitionToNextEvent();
+        } else {
+            loseCombat();
+        }
+    }
+}
+
+function resultPanelBounds(viewWidth: number): { x: number; y: number; width: number; height: number } {
+    const width = 420;
+    const height = 200;
+    return {
+        x: ABILITY_BAR_WIDTH + viewWidth / 2 - width / 2,
+        y: GAME_HEIGHT / 2 - height / 2,
+        width,
+        height,
+    };
 }
