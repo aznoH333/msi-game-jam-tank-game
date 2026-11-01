@@ -2,11 +2,11 @@ import { TILE_SIZE_PX } from "../building/types/tiles";
 import { getOverclockedTurretStats, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip } from "../drawing/canvas";
-import { drawSprite } from "../drawing/sprites";
+import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { getGameState } from "../game/gameState";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, layoutAbilityButtons } from "./abilityBar";
-import { PROJECTILE_SPEED, TANK_SEPARATION } from "./constants";
+import { EXPLOSION_DURATION, TANK_SEPARATION } from "./constants";
 import {
     aimRotation,
     drawCombatVehicle,
@@ -22,6 +22,7 @@ import type { VehicleInstance } from "./types/vehicleInstance";
 
 const HEALTH_PER_CELL = 10;
 const PROJECTILE_SPRITE = "combat/debug_projectile";
+const EXPLOSION_SPRITE = "combat/debug_explosion";
 
 type CombatControl = "PLAYER" | "ENEMY";
 
@@ -49,6 +50,14 @@ interface Projectile {
     toY: number;
     age: number;
     duration: number;
+    explosionRadius: number;
+}
+
+interface Explosion {
+    x: number;
+    y: number;
+    radius: number;
+    age: number;
 }
 
 interface CombatInput {
@@ -62,6 +71,7 @@ let enemy: Combatant | null = null;
 let leftWasDown = false;
 let lastUpdateMs = 0;
 let projectiles: Projectile[] = [];
+let explosions: Explosion[] = [];
 
 function gunsOf(instance: VehicleInstance): TileInstance[] {
     return instance.tiles.filter((part) => part.tile.base.turret !== undefined);
@@ -123,6 +133,36 @@ function drawWorldProjectile(
     });
 }
 
+/** Draw a landing burst if this camera can see it. Scale and opacity follow the same progress. */
+function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: number): void {
+    const sprite = getSpriteSize(EXPLOSION_SPRITE);
+    if (!sprite || sprite.width <= 0) {
+        return;
+    }
+    const screen = worldToScreen(camera, explosion.x, explosion.y);
+    const view = camera.view;
+    const fullScale = (explosion.radius * 2 * camera.layout.cell) / sprite.width;
+    const scale = fullScale * growth;
+    const margin = explosion.radius * camera.layout.cell + 8;
+    if (
+        screen.x < view.x - margin || screen.y < view.y - margin
+        || screen.x > view.x + view.width + margin
+        || screen.y > view.y + view.height + margin
+    ) {
+        return;
+    }
+    setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
+    drawSprite({
+        sprite: EXPLOSION_SPRITE,
+        x: screen.x,
+        y: screen.y,
+        scaleX: scale,
+        scaleY: scale,
+        alpha: 1 - growth,
+        zIndex: 6,
+    });
+}
+
 /** Player and enemy share this update. Only the supplied input can start a shot. */
 function updateCombatant(
     combatant: Combatant,
@@ -175,13 +215,15 @@ function updateCombatant(
                 const radius = Math.sqrt(Math.random()) * stats.accuracy;
                 const toX = runtime.targetX + Math.cos(angle) * radius;
                 const toY = runtime.targetY + Math.sin(angle) * radius;
+                const speed = Math.max(0.001, stats.projectileSpeed);
                 projectiles.push({
                     fromX: origin.x,
                     fromY: origin.y,
                     toX,
                     toY,
                     age: 0,
-                    duration: Math.hypot(toX - origin.x, toY - origin.y) / PROJECTILE_SPEED,
+                    duration: Math.hypot(toX - origin.x, toY - origin.y) / speed,
+                    explosionRadius: Math.max(0, stats.explosionRadius),
                 });
                 runtime.shotsLeft -= 1;
                 if (runtime.shotsLeft > 0 && stats.salvoDelay > 0) {
@@ -205,6 +247,7 @@ export function updateCombat(): void {
         player = createCombatant(state.playerData.vehicle, "PLAYER");
         enemy = createCombatant(state.playerData.vehicle, "ENEMY");
         projectiles = [];
+        explosions = [];
         lastUpdateMs = performance.now();
     }
 
@@ -299,7 +342,16 @@ export function updateCombat(): void {
     const stillFlying: Projectile[] = [];
     for (const shot of projectiles) {
         shot.age += dt;
-        const t = Math.min(1, shot.duration <= 0 ? 1 : shot.age / shot.duration);
+        if (shot.age >= shot.duration) {
+            explosions.push({
+                x: shot.toX,
+                y: shot.toY,
+                radius: shot.explosionRadius,
+                age: 0,
+            });
+            continue;
+        }
+        const t = shot.duration <= 0 ? 1 : shot.age / shot.duration;
         const x = shot.fromX + (shot.toX - shot.fromX) * t;
         const y = shot.fromY + (shot.toY - shot.fromY) * t;
         const worldDx = shot.toX - shot.fromX;
@@ -310,11 +362,27 @@ export function updateCombat(): void {
         if (enemyCamera) {
             drawWorldProjectile(enemyCamera, x, y, worldDx, worldDy, projectileScale);
         }
-        if (shot.age < shot.duration) {
-            stillFlying.push(shot);
-        }
+        stillFlying.push(shot);
     }
     projectiles = stillFlying;
+
+    // expand each burst from a speck to its radius while it fades out
+    const stillBursting: Explosion[] = [];
+    for (const explosion of explosions) {
+        explosion.age += dt;
+        const growth = explosion.age / EXPLOSION_DURATION;
+        if (growth >= 1) {
+            continue;
+        }
+        if (playerCamera) {
+            drawExplosion(playerCamera, explosion, growth);
+        }
+        if (enemyCamera) {
+            drawExplosion(enemyCamera, explosion, growth);
+        }
+        stillBursting.push(explosion);
+    }
+    explosions = stillBursting;
     setDrawClip(null);
 
     drawAbilityBar(guns, player.selectedAbility, player.guns.map((gun) => gun.cooldown));

@@ -8,6 +8,8 @@ export interface TurretCombatStats {
     salvoDelay: number;
     accuracy: number;
     reloadTime: number;
+    projectileSpeed: number;
+    explosionRadius: number;
 }
 
 /** Base turret stats plus every allocated overclock point. */
@@ -22,6 +24,8 @@ export function getOverclockedTurretStats(
         salvoDelay: turret.salvoDelay,
         accuracy: turret.accuracy,
         reloadTime: turret.reloadTime,
+        projectileSpeed: turret.projectileSpeed,
+        explosionRadius: turret.explosionRadius,
     };
 
     for (const overclock of overclocks) {
@@ -44,6 +48,9 @@ export function getOverclockedTurretStats(
         }
         if (slider.reloadTime !== undefined) {
             stats.reloadTime += points * slider.reloadTime * turret.reloadTime;
+        }
+        if (slider.explosionRadius !== undefined) {
+            stats.explosionRadius += points * slider.explosionRadius * turret.explosionRadius;
         }
     }
 

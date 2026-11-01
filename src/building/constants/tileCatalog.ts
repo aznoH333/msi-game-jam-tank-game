@@ -17,6 +17,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 salvoCount: 3,
                 salvoDelay: 0.2,
                 reloadTime: 3.5,
+                explosionRadius: 2.5,
+                projectileSpeed: 25,
 
                 overClocks: [
                     {

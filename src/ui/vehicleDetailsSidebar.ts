@@ -285,12 +285,16 @@ export function drawVehicleDetailsSidebar(
         const salvoDelay = formatFinalStat(turret.salvoDelay, final.salvoDelay);
         const accuracy = formatFinalStat(turret.accuracy, final.accuracy);
         const reload = formatFinalStat(turret.reloadTime, final.reloadTime);
+        const projectileSpeed = formatFinalStat(turret.projectileSpeed, final.projectileSpeed);
+        const explosionRadius = formatFinalStat(turret.explosionRadius, final.explosionRadius);
         rowY = drawInfoRow(x + PADDING, rowY, "Damage", damage.text, damage.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Power per shot", power.text, power.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Salvo count", salvo.text, salvo.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Salvo delay", salvoDelay.text, salvoDelay.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Accuracy", accuracy.text, accuracy.changed);
-        drawInfoRow(x + PADDING, rowY, "Reload time", reload.text, reload.changed);
+        rowY = drawInfoRow(x + PADDING, rowY, "Reload time", reload.text, reload.changed);
+        rowY = drawInfoRow(x + PADDING, rowY, "Projectile speed", projectileSpeed.text, projectileSpeed.changed);
+        drawInfoRow(x + PADDING, rowY, "Explosion radius", explosionRadius.text, explosionRadius.changed);
     } else if (shown.turret) {
         const turret = shown.turret;
         rowY = drawInfoRow(x + PADDING, rowY, "Damage", String(turret.damagePerShot));
@@ -298,6 +302,8 @@ export function drawVehicleDetailsSidebar(
         rowY = drawInfoRow(x + PADDING, rowY, "Salvo count", String(turret.salvoCount));
         rowY = drawInfoRow(x + PADDING, rowY, "Salvo delay", String(turret.salvoDelay));
         rowY = drawInfoRow(x + PADDING, rowY, "Accuracy", String(turret.accuracy));
-        drawInfoRow(x + PADDING, rowY, "Reload time", String(turret.reloadTime));
+        rowY = drawInfoRow(x + PADDING, rowY, "Reload time", String(turret.reloadTime));
+        rowY = drawInfoRow(x + PADDING, rowY, "Projectile speed", String(turret.projectileSpeed));
+        drawInfoRow(x + PADDING, rowY, "Explosion radius", String(turret.explosionRadius));
     }
 }

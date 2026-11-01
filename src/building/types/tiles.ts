@@ -69,6 +69,7 @@ export interface WeaponOverclockSlider {
     salvoDelay?: number;
     accuracy?: number;
     reloadTime?: number;
+    explosionRadius?: number;
 }
 
 
@@ -96,4 +97,9 @@ export interface BaseTurret {
     /** available overclocks for this weapon */
     overClocks: WeaponOverclockSlider[];
 
+    /** How fast does the projectile travel. Stored as tiles/second*/
+    projectileSpeed: number;
+
+    /** How big is the explosion (tiles) */
+    explosionRadius: number;
 }

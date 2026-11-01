@@ -1,4 +1,5 @@
 import { TILE_SIZE_PX } from "../building/types/tiles";
+import { COMBAT_CAMERA_ZOOM } from "./constants";
 import { drawRect, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
@@ -42,7 +43,8 @@ export function layoutCombatVehicle(instance: VehicleInstance, view: CombatViewp
     const footprintHeight = Math.max(1, maxY - minY);
     const availableWidth = Math.max(1, view.width - 48);
     const availableHeight = Math.max(1, view.height - 72);
-    const cell = Math.max(12, Math.min(72, availableWidth / footprintWidth, availableHeight / footprintHeight));
+    const fitted = Math.max(12, Math.min(72, availableWidth / footprintWidth, availableHeight / footprintHeight));
+    const cell = fitted * COMBAT_CAMERA_ZOOM;
     return {
         cell,
         originX: view.x + (view.width - footprintWidth * cell) / 2 - minX * cell,

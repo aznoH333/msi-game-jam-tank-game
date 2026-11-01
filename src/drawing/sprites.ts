@@ -86,6 +86,14 @@ export function drawSprite({
     });
 }
 
+export function getSpriteSize(sprite: string): { width: number; height: number } | null {
+    const image = loadedSprites.get(sprite);
+    if (!image) {
+        return null;
+    }
+    return { width: image.width, height: image.height };
+}
+
 /** Paint sprites queued by drawSprite. Lower zIndex is drawn first. */
 export function renderSprites(): void {
     const draws = queuedSprites.splice(0);

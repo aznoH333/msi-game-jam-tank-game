@@ -6,7 +6,7 @@ import { SIDEBAR_CONTENT_TOP, SIDEBAR_WIDTH, type Bounds } from "./buildingSideb
 
 const PADDING = 16;
 const EFFECT_FIELDS: {
-    key: "damage" | "powerCost" | "salvo" | "salvoDelay" | "accuracy" | "reloadTime";
+    key: "damage" | "powerCost" | "salvo" | "salvoDelay" | "accuracy" | "reloadTime" | "explosionRadius";
     stat: keyof TurretCombatStats;
     label: string;
 }[] = [
@@ -16,6 +16,7 @@ const EFFECT_FIELDS: {
     { key: "salvoDelay", stat: "salvoDelay", label: "Salvo delay" },
     { key: "accuracy", stat: "accuracy", label: "Accuracy" },
     { key: "reloadTime", stat: "reloadTime", label: "Reload time" },
+    { key: "explosionRadius", stat: "explosionRadius", label: "Explosion radius" },
 ];
 
 export interface OverclockCard {
