@@ -8,6 +8,7 @@ export interface PlayerData {
 export function initPlayerData(): PlayerData {
     return {
         vehicle: {
+            name: "Tank",
             tiles: []
         }
     }

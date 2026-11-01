@@ -3,12 +3,16 @@ import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import { TILE_SIZE_PX, type BaseTile, type TileType } from "../building/types/tiles";
 
-export const SIDEBAR_WIDTH = 300;
+export const SIDEBAR_WIDTH = 380;
+export const SIDEBAR_CONTENT_TOP = 68;
 
-const TABS: { type: TileType; label: string }[] = [
+export type EditorTab = TileType | "OVERCLOCK";
+
+const TABS: { type: EditorTab; label: string }[] = [
     { type: "WEAPON", label: "weapons" },
     { type: "UTILITY", label: "utility" },
     { type: "BLOCK", label: "blocks" },
+    { type: "OVERCLOCK", label: "overclocks" },
 ];
 
 export interface Bounds {
@@ -19,7 +23,7 @@ export interface Bounds {
 }
 
 export interface SidebarTab {
-    type: TileType;
+    type: EditorTab;
     label: string;
     active: boolean;
     bounds: Bounds;
@@ -36,7 +40,7 @@ export interface SidebarLayout {
     entries: SidebarEntry[];
 }
 
-export function layoutSidebar(screenHeight: number, activeTab: TileType, tiles: BaseTile[]): SidebarLayout {
+export function layoutSidebar(screenHeight: number, activeTab: EditorTab, tiles: BaseTile[]): SidebarLayout {
     const padding = 16;
     const tabY = 16;
     const tabHeight = 36;
@@ -57,7 +61,7 @@ export function layoutSidebar(screenHeight: number, activeTab: TileType, tiles: 
 
     const entryHeight = 64;
     const entryGap = 8;
-    let entryY = tabY + tabHeight + padding;
+    let entryY = SIDEBAR_CONTENT_TOP;
     const entries = tiles.map((tile) => {
         const bounds = {
             x: padding,
@@ -105,14 +109,15 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             text: tab.label,
             x: tab.bounds.x + tab.bounds.width / 2,
             y: tab.bounds.y + tab.bounds.height / 2,
-            font: "14px sans-serif",
+            font: "13px sans-serif",
             color: "#eceae4",
             align: "center",
             baseline: "middle",
         });
     }
 
-    if (layout.entries.length === 0) {
+    const overclockMode = layout.tabs.some((tab) => tab.type === "OVERCLOCK" && tab.active);
+    if (layout.entries.length === 0 && !overclockMode) {
         drawText({
             text: "No parts",
             x: 24,
@@ -159,9 +164,9 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             scaleY: iconScale,
             zIndex: 3,
         });
-        if (entry.tile.turretSprite) {
+        if (entry.tile.turret) {
             drawSprite({
-                sprite: entry.tile.turretSprite,
+                sprite: entry.tile.turret.turretSprite,
                 x: iconX,
                 y: iconY,
                 scaleX: iconScale,

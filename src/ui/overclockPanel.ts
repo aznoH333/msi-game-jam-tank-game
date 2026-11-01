@@ -1,0 +1,173 @@
+import { getOverclockedTurretStats, type TurretCombatStats } from "../building/vehicleUtils";
+import type { PlacedTile } from "../building/types/tiles";
+import { drawRect } from "../drawing/canvas";
+import { drawText, measureText } from "../drawing/text";
+import { SIDEBAR_CONTENT_TOP, SIDEBAR_WIDTH, type Bounds } from "./buildingSidebar";
+
+const PADDING = 16;
+const EFFECT_FIELDS: {
+    key: "damage" | "powerCost" | "salvo" | "salvoDelay" | "accuracy" | "reloadTime";
+    stat: keyof TurretCombatStats;
+    label: string;
+}[] = [
+    { key: "damage", stat: "damagePerShot", label: "Damage" },
+    { key: "powerCost", stat: "powerPerShot", label: "Power per shot" },
+    { key: "salvo", stat: "salvoCount", label: "Salvo count" },
+    { key: "salvoDelay", stat: "salvoDelay", label: "Salvo delay" },
+    { key: "accuracy", stat: "accuracy", label: "Accuracy" },
+    { key: "reloadTime", stat: "reloadTime", label: "Reload time" },
+];
+
+export interface OverclockCard {
+    index: number;
+    track: Bounds;
+}
+
+function formatStat(value: number): string {
+    return String(Math.round(value * 1000) / 1000);
+}
+
+export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[] {
+    if (!placed?.base.turret) {
+        return [];
+    }
+
+    const cards: OverclockCard[] = [];
+    let y = SIDEBAR_CONTENT_TOP;
+    const width = SIDEBAR_WIDTH - PADDING * 2;
+    for (let index = 0; index < placed.overclocks.length; index++) {
+        const slider = placed.overclocks[index].base;
+        y += 24;
+        const track = { x: PADDING, y, width, height: 18 };
+        y += 28;
+        for (const field of EFFECT_FIELDS) {
+            if (slider[field.key] !== undefined) {
+                y += 22;
+            }
+        }
+        y += 16;
+        cards.push({ index, track });
+    }
+    return cards;
+}
+
+export function drawOverclockPanel(placed: PlacedTile | null): void {
+    if (!placed?.base.turret) {
+        drawText({
+            text: "Select a placed turret",
+            x: PADDING,
+            y: SIDEBAR_CONTENT_TOP,
+            font: "16px sans-serif",
+            color: "#a8a49a",
+            align: "left",
+            baseline: "top",
+        });
+        return;
+    }
+
+    const turret = placed.base.turret;
+    const cards = layoutOverclockCards(placed);
+    for (const card of cards) {
+        const instance = placed.overclocks[card.index];
+        const adjusted = getOverclockedTurretStats(turret, [instance]);
+        const nameY = card.track.y - 24;
+
+        drawText({
+            text: instance.base.name,
+            x: PADDING,
+            y: nameY,
+            font: "16px sans-serif",
+            color: "#eceae4",
+            align: "left",
+            baseline: "top",
+        });
+        drawText({
+            text: formatStat(instance.value),
+            x: SIDEBAR_WIDTH - PADDING,
+            y: nameY,
+            font: "16px sans-serif",
+            color: "#eceae4",
+            align: "right",
+            baseline: "top",
+        });
+
+        // slider track and the allocated-point knob
+        drawRect({
+            x: card.track.x,
+            y: card.track.y,
+            width: card.track.width,
+            height: card.track.height,
+            color: "#2a3040",
+        });
+        const span = instance.base.maxValue - instance.base.minValue;
+        const amount = span === 0 ? 0 : (instance.value - instance.base.minValue) / span;
+        const knobX = card.track.x + amount * card.track.width;
+        drawRect({
+            x: card.track.x,
+            y: card.track.y,
+            width: Math.max(0, knobX - card.track.x),
+            height: card.track.height,
+            color: "#3d465c",
+        });
+        drawRect({
+            x: knobX - 4,
+            y: card.track.y - 2,
+            width: 8,
+            height: card.track.height + 4,
+            color: "#e6c07b",
+        });
+
+        // this slider's stat effects: base value, then the overclocked value
+        let effectY = card.track.y + card.track.height + 10;
+        for (const field of EFFECT_FIELDS) {
+            if (instance.base[field.key] === undefined) {
+                continue;
+            }
+            const baseText = formatStat(turret[field.stat]);
+            const nextText = formatStat(adjusted[field.stat]);
+            const nextColor = nextText === baseText ? "#eceae4" : "#e6c07b";
+            const arrow = " -> ";
+            const right = SIDEBAR_WIDTH - PADDING;
+            const nextX = right - measureText(nextText, "14px sans-serif");
+            const arrowX = nextX - measureText(arrow, "14px sans-serif");
+            const baseX = arrowX - measureText(baseText, "14px sans-serif");
+            drawText({
+                text: field.label,
+                x: PADDING,
+                y: effectY,
+                font: "14px sans-serif",
+                color: "#a8a49a",
+                align: "left",
+                baseline: "top",
+            });
+            drawText({
+                text: baseText,
+                x: baseX,
+                y: effectY,
+                font: "14px sans-serif",
+                color: "#eceae4",
+                align: "left",
+                baseline: "top",
+            });
+            drawText({
+                text: arrow,
+                x: arrowX,
+                y: effectY,
+                font: "14px sans-serif",
+                color: "#a8a49a",
+                align: "left",
+                baseline: "top",
+            });
+            drawText({
+                text: nextText,
+                x: nextX,
+                y: effectY,
+                font: "14px sans-serif",
+                color: nextColor,
+                align: "left",
+                baseline: "top",
+            });
+            effectY += 22;
+        }
+    }
+}

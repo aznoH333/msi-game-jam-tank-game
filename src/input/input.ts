@@ -9,6 +9,7 @@ const MOUSE_BUTTON_FROM_MASK: { mask: number; button: number }[] = [
 let mouseX = -1;
 let mouseY = -1;
 let wheelDeltaY = 0;
+let typedText = "";
 const heldMouseButtons = new Set<number>();
 const heldKeys = new Set<string>();
 let listening = false;
@@ -69,6 +70,19 @@ export function startInput(): void {
 
     window.addEventListener("keydown", (event) => {
         heldKeys.add(event.code);
+        if (event.key === "Backspace") {
+            typedText += "\b";
+            event.preventDefault();
+            return;
+        }
+        if (event.key === "Enter") {
+            typedText += "\n";
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) {
+            return;
+        }
+        typedText += event.key;
     });
     window.addEventListener("keyup", (event) => {
         heldKeys.delete(event.code);
@@ -89,6 +103,13 @@ export function consumeWheelDelta(): number {
     const delta = wheelDeltaY;
     wheelDeltaY = 0;
     return delta;
+}
+
+/** Characters typed since the last call. Includes backspace and enter. */
+export function consumeTypedText(): string {
+    const text = typedText;
+    typedText = "";
+    return text;
 }
 
 /** `code` is a KeyboardEvent.code, such as "KeyW" or "Space". */

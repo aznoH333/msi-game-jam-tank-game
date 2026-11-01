@@ -6,9 +6,38 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             tileName: "Debug gun",
             type: "WEAPON",
             tileSprite: "tiles/debug_turret_base",
-            turretSprite: "tiles/debug_turret",
             width: 2,
             height: 2,
+            turret: {
+                turretSprite: "tiles/debug_turret", 
+                accuracy: 3,
+                damagePerShot: 20,
+                powerPerShot: 20,
+                salvoCount: 3,
+                salvoDelay: 0.2,
+                reloadTime: 3.5,
+
+                overClocks: [
+                    {
+                        name: "Damage overclock",
+                        baseValue: 0,
+                        minValue: -0.5,
+                        maxValue: 1,
+                        stepSize: 0.25,
+                        damage: 1.1,
+                        powerCost: 1.2,
+                    },
+                    {
+                        name: "Reload overclock",
+                        baseValue: 1,
+                        minValue: 0.5,
+                        maxValue: 2,
+                        stepSize: 0.25,
+                        reloadTime: 0.9,
+                        powerCost: 1.5,
+                    }
+                ]
+            }
         },
     ],
     "UTILITY": [

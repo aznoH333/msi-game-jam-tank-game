@@ -3,10 +3,11 @@ import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
-import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds } from "../ui/buildingSidebar";
-import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar } from "../ui/vehicleDetailsSidebar";
+import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
+import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
+import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
-import { TILE_SIZE_PX, type BaseTile, type TileType } from "./types/tiles";
+import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "./types/tiles";
 
 const GRID_COLUMNS = 32;
 const GRID_ROWS = 32;
@@ -24,8 +25,11 @@ interface GridGeometry {
     cell: number;
 }
 
-let selectedTab: TileType = "BLOCK";
+let selectedTab: EditorTab = "BLOCK";
 let selectedTile: BaseTile | null = TILE_CATALOG.BLOCK[0] ?? null;
+let selectedOverclockTile: PlacedTile | null = null;
+let draggedOverclock = -1;
+let editorLeftWasDown = false;
 let zoom = 1;
 let cameraX = 0;
 let cameraY = 0;
@@ -88,9 +92,9 @@ function drawTileSprite(
     });
 
     // turret sits on top of the base, in the same pixel scale
-    if (tile.turretSprite) {
+    if (tile.turret) {
         drawSprite({
-            sprite: tile.turretSprite,
+            sprite: tile.turret.turretSprite,
             x: centerX,
             y: centerY,
             scaleX: scale,
@@ -108,6 +112,7 @@ export function updateVehicleEditor(state: GameState): void {
     const paneWidth = Math.max(0, GAME_WIDTH - SIDEBAR_WIDTH - DETAILS_SIDEBAR_WIDTH);
     const paneHeight = GAME_HEIGHT;
     const overVehicle = mouse.x >= SIDEBAR_WIDTH && mouse.x < GAME_WIDTH - DETAILS_SIDEBAR_WIDTH && mouse.y >= 0;
+    updateVehicleNameInput(state.playerData.vehicle);
 
     // start centered on the build grid
     if (!cameraCentered) {
@@ -175,11 +180,20 @@ export function updateVehicleEditor(state: GameState): void {
     cameraY = viewCenterY - focusY * cellSize;
 
     const grid = vehicleGridGeometry();
-    const layout = layoutSidebar(GAME_HEIGHT, selectedTab, TILE_CATALOG[selectedTab]);
+    const catalogTiles = selectedTab === "OVERCLOCK" ? [] : TILE_CATALOG[selectedTab];
+    const layout = layoutSidebar(GAME_HEIGHT, selectedTab, catalogTiles);
     const hover = cellAt(grid, mouse.x, mouse.y);
+    const leftDown = isMouseButtonDown(0);
+    const leftPressed = leftDown && !editorLeftWasDown;
+    if (
+        selectedOverclockTile
+        && !state.playerData.vehicle.tiles.includes(selectedOverclockTile)
+    ) {
+        selectedOverclockTile = null;
+    }
 
     // hold right button to erase tiles under the cursor
-    if (!panning && isMouseButtonDown(2) && hover) {
+    if (!panning && selectedTab !== "OVERCLOCK" && isMouseButtonDown(2) && hover) {
         const index = state.playerData.vehicle.tiles.findIndex((placed) => {
             return hover.x >= placed.x
                 && hover.x < placed.x + placed.base.width
@@ -189,7 +203,7 @@ export function updateVehicleEditor(state: GameState): void {
         if (index >= 0) {
             state.playerData.vehicle.tiles.splice(index, 1);
         }
-    } else if (!panning && isMouseButtonDown(0)) {
+    } else if (!panning && leftDown) {
         let overSidebar = false;
 
         // switch sidebar tab
@@ -198,48 +212,94 @@ export function updateVehicleEditor(state: GameState): void {
                 continue;
             }
             selectedTab = tab.type;
-            const tiles = TILE_CATALOG[selectedTab];
-            const stillListed = selectedTile !== null && tiles.includes(selectedTile);
-            selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
+            if (selectedTab !== "OVERCLOCK") {
+                const tiles = TILE_CATALOG[selectedTab];
+                const stillListed = selectedTile !== null && tiles.includes(selectedTile);
+                selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
+            }
             overSidebar = true;
             break;
         }
 
-        // choose a part to place
-        if (!overSidebar) {
-            for (const entry of layout.entries) {
-                if (!hits(entry.bounds, mouse.x, mouse.y)) {
-                    continue;
+        if (selectedTab === "OVERCLOCK") {
+            const cards = layoutOverclockCards(selectedOverclockTile);
+            if (leftPressed) {
+                const hit = cards.find((card) => hits(card.track, mouse.x, mouse.y));
+                if (hit) {
+                    draggedOverclock = hit.index;
+                } else if (!overSidebar && hover) {
+                    const turret = state.playerData.vehicle.tiles.find((placed) => {
+                        return hover.x >= placed.x
+                            && hover.x < placed.x + placed.base.width
+                            && hover.y >= placed.y
+                            && hover.y < placed.y + placed.base.height
+                            && placed.base.turret !== undefined
+                            && placed.base.turret.overClocks.length > 0;
+                    });
+                    selectedOverclockTile = turret ?? null;
                 }
-                selectedTile = entry.tile;
-                overSidebar = true;
-                break;
             }
-        }
 
-        // hold left button to paint the tile centered on the cursor
-        if (!overSidebar && hover && selectedTile) {
-            const tileToPlace: BaseTile = selectedTile;
-            const origin = placementOrigin(grid, mouse.x, mouse.y, tileToPlace);
-            const insideGrid = origin.x >= 0
-                && origin.y >= 0
-                && origin.x + tileToPlace.width <= GRID_COLUMNS
-                && origin.y + tileToPlace.height <= GRID_ROWS;
-            const blocked = state.playerData.vehicle.tiles.some((placed) => {
-                return origin.x < placed.x + placed.base.width
-                    && origin.x + tileToPlace.width > placed.x
-                    && origin.y < placed.y + placed.base.height
-                    && origin.y + tileToPlace.height > placed.y;
-            });
-            if (insideGrid && !blocked) {
-                state.playerData.vehicle.tiles.push({
-                    base: { ...tileToPlace },
-                    x: origin.x,
-                    y: origin.y,
+            // drag the grabbed overclock slider and snap it to its step
+            if (draggedOverclock >= 0 && selectedOverclockTile) {
+                const card = cards[draggedOverclock];
+                const instance = selectedOverclockTile.overclocks[draggedOverclock];
+                if (card && instance && card.track.width > 0) {
+                    const slider = instance.base;
+                    const span = slider.maxValue - slider.minValue;
+                    const along = Math.min(1, Math.max(0, (mouse.x - card.track.x) / card.track.width));
+                    const raw = slider.minValue + along * span;
+                    const steps = slider.stepSize === 0 ? 0 : Math.round((raw - slider.minValue) / slider.stepSize);
+                    const snapped = slider.minValue + steps * slider.stepSize;
+                    instance.value = Number(Math.min(slider.maxValue, Math.max(slider.minValue, snapped)).toFixed(4));
+                }
+            }
+        } else {
+            // choose a part to place
+            if (!overSidebar) {
+                for (const entry of layout.entries) {
+                    if (!hits(entry.bounds, mouse.x, mouse.y)) {
+                        continue;
+                    }
+                    selectedTile = entry.tile;
+                    overSidebar = true;
+                    break;
+                }
+            }
+
+            // hold left button to paint the tile centered on the cursor
+            if (!overSidebar && hover && selectedTile) {
+                const tileToPlace: BaseTile = selectedTile;
+                const origin = placementOrigin(grid, mouse.x, mouse.y, tileToPlace);
+                const insideGrid = origin.x >= 0
+                    && origin.y >= 0
+                    && origin.x + tileToPlace.width <= GRID_COLUMNS
+                    && origin.y + tileToPlace.height <= GRID_ROWS;
+                const blocked = state.playerData.vehicle.tiles.some((placed) => {
+                    return origin.x < placed.x + placed.base.width
+                        && origin.x + tileToPlace.width > placed.x
+                        && origin.y < placed.y + placed.base.height
+                        && origin.y + tileToPlace.height > placed.y;
                 });
+                if (insideGrid && !blocked) {
+                    state.playerData.vehicle.tiles.push({
+                        base: { ...tileToPlace },
+                        x: origin.x,
+                        y: origin.y,
+                        overclocks: (tileToPlace.turret?.overClocks ?? []).map((slider) => ({
+                            base: slider,
+                            value: slider.baseValue,
+                        })),
+                    });
+                }
             }
         }
     }
+
+    if (!leftDown) {
+        draggedOverclock = -1;
+    }
+    editorLeftWasDown = leftDown;
 
     // vehicle pane, clipped so the grid cannot paint over the sidebar
     setDrawClip({
@@ -304,7 +364,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // placement preview sits on the grid cells the cursor-centered tile would occupy
-    if (hover && selectedTile) {
+    if (selectedTab !== "OVERCLOCK" && hover && selectedTile) {
         const origin = placementOrigin(grid, mouse.x, mouse.y, selectedTile);
         let previewColor: string | undefined;
         for (const placed of state.playerData.vehicle.tiles) {
@@ -345,10 +405,31 @@ export function updateVehicleEditor(state: GameState): void {
         }
     }
 
+    // mark turrets that can be overclocked, and the one currently selected
+    if (selectedTab === "OVERCLOCK") {
+        for (const placed of state.playerData.vehicle.tiles) {
+            if (!placed.base.turret || placed.base.turret.overClocks.length === 0) {
+                continue;
+            }
+            strokeRect({
+                x: grid.x + placed.x * grid.cell + 1,
+                y: grid.y + placed.y * grid.cell + 1,
+                width: placed.base.width * grid.cell - 2,
+                height: placed.base.height * grid.cell - 2,
+                color: placed === selectedOverclockTile ? "#e6c07b" : "#8ecbff",
+                lineWidth: 2,
+            });
+        }
+    }
+
     setDrawClip(null);
-    drawBuildingSidebar(
-        layoutSidebar(GAME_HEIGHT, selectedTab, TILE_CATALOG[selectedTab]),
+    drawBuildingSidebar(layout, selectedTile);
+    if (selectedTab === "OVERCLOCK") {
+        drawOverclockPanel(selectedOverclockTile);
+    }
+    drawVehicleDetailsSidebar(
+        state.playerData.vehicle,
         selectedTile,
+        selectedTab === "OVERCLOCK" ? selectedOverclockTile : undefined,
     );
-    drawVehicleDetailsSidebar(state.playerData.vehicle, selectedTile);
 }

@@ -38,6 +38,12 @@ export function drawText({
     queuedText.push({ text, x, y, font, color, align, baseline, zIndex, clip: getDrawClip() });
 }
 
+export function measureText(text: string, font = "16px sans-serif"): number {
+    const context = getCanvasContext();
+    context.font = font;
+    return context.measureText(text).width;
+}
+
 /** Paint text queued by drawText. Lower zIndex is drawn first. */
 export function renderText(): void {
     const draws = queuedText.splice(0);

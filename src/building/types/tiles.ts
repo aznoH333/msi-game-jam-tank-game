@@ -27,8 +27,7 @@ export interface BaseTile{
     powerCapacity?: number;
     powerGenerationPerSecond?: number;
 
-    /** This is used as the turret sprite. If undefined the tile has no turret */
-    turretSprite?: string;
+    turret?: BaseTurret;
 }
 
 
@@ -40,5 +39,58 @@ export interface PlacedTile {
     base: BaseTile;
     x: number; // x offset in tiles
     y: number; // y offset in tiles
+    /** The used overclocks. Must always match the overclocks present in BaseTile */
+    overclocks: WeaponOverclockInstance[];
+
+}
+
+export interface WeaponOverclockInstance {
+    base: WeaponOverclockSlider;
+    value: number;
+}
+
+export interface WeaponOverclockSlider {
+    /** slider definition */
+    name: string;
+    baseValue: number;
+    minValue: number;
+    maxValue: number;
+    stepSize: number;
+
+
+
+    /** multiplier values. Scales with points allocated */
+    damage?: number;
+    powerCost?: number;
+    salvo?: number;
+    salvoDelay?: number;
+    accuracy?: number;
+    reloadTime?: number;
+}
+
+
+/**
+ * Represents a turret. Holds information about the turrent doesn't hold information about its state.
+ * All time related statistics are listed in seconds
+ */
+export interface BaseTurret {
+    turretSprite: string;
+
+    /** How much damage an individual projectile does */
+    damagePerShot: number;
+    /** How much power is consumed when a projecitles is fired */
+    powerPerShot: number;
+    /** How many times will the weapon fire per action */
+    salvoCount: number;
+    /** Delay between each salvo shot */
+    salvoDelay: number;
+    /** How much will the shot diviate from the target (in tiles) */
+    accuracy: number;
+
+    /** How long until the weapon can be fired again */
+    reloadTime: number;
+
+    /** available overclocks for this weapon */
+    overClocks: WeaponOverclockSlider[];
 
 }

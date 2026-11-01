@@ -22,6 +22,14 @@
 - [X] setup block and vehicle structs
 - [X] basic implementation of the building screen
 - [X] fix scaling on itchio
-- [ ] Generators and batteries
-- [ ] New sidebar on the right displaying vehicle information
-- [ ] Display selected tile info on the right
+- [X] Generators and batteries
+- [X] New sidebar on the right displaying vehicle information
+- [X] Display selected tile info on the right
+
+
+- [X] wire name into the vehicle detail bar
+- [X] add turret statistics
+- [X] add overclock menu
+- [X] add overclock sliders
+- [ ] add currency and prices
+- [ ] add weight
