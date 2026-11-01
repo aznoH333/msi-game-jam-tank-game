@@ -1,13 +1,14 @@
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
 import { mainMenuUpdate } from "./mainMenu";
+import { PlayerData } from "./playerData";
 
 
 export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN";
 
 export interface GameState {
-
     currentScreen: GameScreen;
+    playerData: PlayerData;
 };
 
 
@@ -16,7 +17,8 @@ export interface GameState {
 export function initGame(): GameState {
     // initializes new game
     return {
-        currentScreen: "BUILDING_SCREEN"
+        currentScreen: "BUILDING_SCREEN",
+        playerData: initPlayerData(),
     };
 }
 
@@ -51,4 +53,8 @@ export function updateGame(state: GameState) {
     }
 }
 
+
+function initPlayerData(): PlayerData {
+    throw new Error("Function not implemented.");
+}
 

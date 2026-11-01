@@ -15,9 +15,9 @@
 
 
 # short term goals.
-- [ ] setup graphics module
-- [ ] setup program loop
-- [ ] make placeholder sprites
-- [ ] load placeholder sprites
-- [ ] setup block and vehicle structs
+- [X] setup graphics module
+- [X] setup program loop
+- [X] make placeholder sprites
+- [X] load placeholder sprites
+- [X] setup block and vehicle structs
 - [ ] basic implementation of the building screen
