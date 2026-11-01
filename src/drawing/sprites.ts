@@ -135,10 +135,16 @@ export function renderSprites(): void {
                 tintContext.imageSmoothingEnabled = false;
                 tintContext.globalCompositeOperation = "source-over";
                 tintContext.drawImage(image, 0, 0);
-                tintContext.globalCompositeOperation = "source-atop";
+                tintContext.globalCompositeOperation = "source-in";
                 tintContext.fillStyle = draw.color;
                 tintContext.fillRect(0, 0, image.width, image.height);
+                tintContext.globalCompositeOperation = "multiply";
+                tintContext.drawImage(image, 0, 0);
+                
+                context.globalCompositeOperation = "source-over";
                 context.drawImage(tintCanvas, -image.width / 2, -image.height / 2);
+                context.globalCompositeOperation = "source-over";
+
             }
         } else {
             context.drawImage(image, -image.width / 2, -image.height / 2);

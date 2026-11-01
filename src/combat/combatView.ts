@@ -83,6 +83,17 @@ function footprintCenter(layout: CombatVehicleLayout): { x: number; y: number } 
     };
 }
 
+/** World position of a point in this tank's tile grid. */
+export function localToWorld(camera: CombatCamera, localX: number, localY: number): { x: number; y: number } {
+    const center = footprintCenter(camera.layout);
+    const dx = localX - center.x;
+    const dy = localY - center.y;
+    if (camera.inverted) {
+        return { x: camera.worldX + dx, y: camera.worldY - dy };
+    }
+    return { x: camera.worldX + dx, y: camera.worldY + dy };
+}
+
 /** World position of a tile center, as seen by this tank's camera. */
 export function tileToWorld(
     camera: CombatCamera,
@@ -91,13 +102,7 @@ export function tileToWorld(
     width: number,
     height: number,
 ): { x: number; y: number } {
-    const center = footprintCenter(camera.layout);
-    const dx = tileX + width / 2 - center.x;
-    const dy = tileY + height / 2 - center.y;
-    if (camera.inverted) {
-        return { x: camera.worldX + dx, y: camera.worldY - dy };
-    }
-    return { x: camera.worldX + dx, y: camera.worldY + dy };
+    return localToWorld(camera, tileX + width / 2, tileY + height / 2);
 }
 
 /** Project a world point onto this camera. Both cameras share world +X right and world +Y down the screen. */
@@ -199,7 +204,16 @@ export function drawCombatVehicle(
 
     const footprintCenterY = layout.originY + (layout.minY + layout.maxY) / 2 * layout.cell;
     instance.tiles.forEach((part, index) => {
+        if (part.health <= 0) {
+            return;
+        }
         const tile = part.tile;
+        const maxHealth = tile.base.health;
+        const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, part.health) / maxHealth;
+        // full color at full health, 30% of each channel when health is gone
+        const shade = 0.3 + 0.7 * healthRatio;
+        const channel = Math.round(255 * shade);
+        const damageTint = shade >= 1 ? undefined : `rgb(${channel}, ${channel}, ${channel})`;
         const width = tile.base.width * layout.cell;
         const height = tile.base.height * layout.cell;
         const left = layout.originX + tile.x * layout.cell;
@@ -210,14 +224,14 @@ export function drawCombatVehicle(
             y: drawTop,
             width,
             height,
-            color: "#2e3648",
+            color: scaleColor("#2e3648", shade),
         });
         strokeRect({
             x: left + 0.5,
             y: drawTop + 0.5,
             width,
             height,
-            color: "#3a4254",
+            color: scaleColor("#3a4254", shade),
         });
         const scale = layout.cell / TILE_SIZE_PX;
         const center = combatTileCenter(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
@@ -227,6 +241,7 @@ export function drawCombatVehicle(
             y: center.y,
             scaleX: scale,
             scaleY: inverted ? -scale : scale,
+            color: damageTint,
             zIndex: 1,
         });
         if (tile.base.turret) {
@@ -237,8 +252,17 @@ export function drawCombatVehicle(
                 scaleX: scale,
                 scaleY: inverted ? -scale : scale,
                 rotationRad: turretRotations[index] ?? 0,
+                color: damageTint,
                 zIndex: 2,
             });
         }
     });
+}
+
+function scaleColor(hex: string, factor: number): string {
+    const rgb = Number.parseInt(hex.slice(1), 16);
+    const red = Math.round(((rgb >> 16) & 255) * factor);
+    const green = Math.round(((rgb >> 8) & 255) * factor);
+    const blue = Math.round((rgb & 255) * factor);
+    return `rgb(${red}, ${green}, ${blue})`;
 }

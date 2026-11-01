@@ -9,15 +9,18 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 2,
             height: 2,
             price: 10_000,
+            health: 100,
+            explosionDamage: 20,
+            explosionRadius: 2.5,
             turret: {
                 turretSprite: "tiles/debug_turret", 
-                accuracy: 3,
+                accuracy: 2,
                 damagePerShot: 20,
                 powerPerShot: 20,
                 salvoCount: 3,
                 salvoDelay: 0.2,
                 reloadTime: 3.5,
-                explosionRadius: 2.5,
+                explosionRadius: 1.5,
                 projectileSpeed: 25,
 
                 overClocks: [
@@ -51,6 +54,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             price: 200,
+            health: 40,
         },
         {
             tileName: "Small battery",
@@ -60,6 +64,9 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             height: 1,
             powerCapacity: 50,
             price: 500,
+            health: 40,
+            explosionRadius: 1.5,
+            explosionDamage: 5,
         },
         {
             tileName: "Small generator",
@@ -69,6 +76,9 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             height: 1,
             powerGenerationPerSecond: 5,
             price: 1_000,
+            health: 40,
+            explosionRadius: 2,
+            explosionDamage: 5,
 
         },
         {
@@ -79,6 +89,9 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             height: 2,
             powerCapacity: 250,
             price: 800,
+            health: 160,
+            explosionRadius: 2.3,
+            explosionDamage: 10,
         },
         {
             tileName: "Big generator",
@@ -88,6 +101,9 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             height: 2,
             powerGenerationPerSecond: 25,
             price: 4_000,
+            health: 160,
+            explosionRadius: 2.5,
+            explosionDamage: 10,
         }
     ],
     "BLOCK": [
@@ -98,6 +114,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             price: 200,
+            health: 50,
         },
         {
             tileName: "Block 2",
@@ -106,7 +123,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             price: 200,
-
+            health: 50,
         },
         {
             tileName: "Block 3",
@@ -115,7 +132,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             price: 200,
-
+            health: 50,
         },
         {
             tileName: "Block 4",
@@ -124,7 +141,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             price: 200,
-
+            health: 50,
         },
         {
             tileName: "Big tile",
@@ -133,7 +150,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 2,
             height: 2,
             price: 800,
-
+            health: 250,
         },
     ],
 };

@@ -26,6 +26,12 @@ export interface BaseTile{
     
     powerCapacity?: number;
     powerGenerationPerSecond?: number;
+    /** radius of the on death explosion, measured in tiles */
+    explosionRadius?: number;
+    /** damage of the on death explosion */
+    explosionDamage?: number;
+    /** the max health of the tile */
+    health: number;
 
 
     price: number;
