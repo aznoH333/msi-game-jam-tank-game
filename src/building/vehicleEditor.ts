@@ -1,9 +1,10 @@
-import { drawRect, setDrawClip, strokeRect } from "../drawing/canvas";
+import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds } from "../ui/buildingSidebar";
+import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { TILE_SIZE_PX, type BaseTile, type TileType } from "./types/tiles";
 
@@ -50,7 +51,7 @@ function hits(bounds: Bounds, x: number, y: number): boolean {
 }
 
 function cellAt(grid: GridGeometry, x: number, y: number): { x: number; y: number } | null {
-    if (x < SIDEBAR_WIDTH || !hits({ x: grid.x, y: grid.y, width: grid.width, height: grid.height }, x, y)) {
+    if (x < SIDEBAR_WIDTH || x >= GAME_WIDTH - DETAILS_SIDEBAR_WIDTH || !hits({ x: grid.x, y: grid.y, width: grid.width, height: grid.height }, x, y)) {
         return null;
     }
     return {
@@ -104,14 +105,16 @@ function drawTileSprite(
 export function updateVehicleEditor(state: GameState): void {
     const mouse = getMousePosition();
     const wheel = consumeWheelDelta();
-    const overVehicle = mouse.x >= SIDEBAR_WIDTH && mouse.y >= 0;
+    const paneWidth = Math.max(0, GAME_WIDTH - SIDEBAR_WIDTH - DETAILS_SIDEBAR_WIDTH);
+    const paneHeight = GAME_HEIGHT;
+    const overVehicle = mouse.x >= SIDEBAR_WIDTH && mouse.x < GAME_WIDTH - DETAILS_SIDEBAR_WIDTH && mouse.y >= 0;
 
     // start centered on the build grid
     if (!cameraCentered) {
         cameraCentered = true;
         const cell = CELL_SIZE_PX * zoom;
-        cameraX = SIDEBAR_WIDTH + Math.max(0, window.innerWidth - SIDEBAR_WIDTH) / 2 - (GRID_COLUMNS / 2) * cell;
-        cameraY = window.innerHeight / 2 - (GRID_ROWS / 2) * cell;
+        cameraX = SIDEBAR_WIDTH + paneWidth / 2 - (GRID_COLUMNS / 2) * cell;
+        cameraY = GAME_HEIGHT / 2 - (GRID_ROWS / 2) * cell;
     }
 
     // drag the camera with the middle mouse button
@@ -143,8 +146,6 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // keep the view center from wandering away from the vehicle
-    const paneWidth = Math.max(0, window.innerWidth - SIDEBAR_WIDTH);
-    const paneHeight = window.innerHeight;
     const cellSize = CELL_SIZE_PX * zoom;
     const viewCenterX = SIDEBAR_WIDTH + paneWidth / 2;
     const viewCenterY = paneHeight / 2;
@@ -174,7 +175,7 @@ export function updateVehicleEditor(state: GameState): void {
     cameraY = viewCenterY - focusY * cellSize;
 
     const grid = vehicleGridGeometry();
-    const layout = layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]);
+    const layout = layoutSidebar(GAME_HEIGHT, selectedTab, TILE_CATALOG[selectedTab]);
     const hover = cellAt(grid, mouse.x, mouse.y);
 
     // hold right button to erase tiles under the cursor
@@ -269,9 +270,9 @@ export function updateVehicleEditor(state: GameState): void {
 
     // empty grid cells that intersect the vehicle pane
     const firstColumn = Math.max(0, Math.floor((SIDEBAR_WIDTH - grid.x) / grid.cell));
-    const lastColumn = Math.min(GRID_COLUMNS - 1, Math.floor((window.innerWidth - grid.x - 0.001) / grid.cell));
+    const lastColumn = Math.min(GRID_COLUMNS - 1, Math.floor((SIDEBAR_WIDTH + paneWidth - grid.x - 0.001) / grid.cell));
     const firstRow = Math.max(0, Math.floor((0 - grid.y) / grid.cell));
-    const lastRow = Math.min(GRID_ROWS - 1, Math.floor((window.innerHeight - grid.y - 0.001) / grid.cell));
+    const lastRow = Math.min(GRID_ROWS - 1, Math.floor((GAME_HEIGHT - grid.y - 0.001) / grid.cell));
     for (let y = firstRow; y <= lastRow; y++) {
         for (let x = firstColumn; x <= lastColumn; x++) {
             drawRect({
@@ -346,7 +347,8 @@ export function updateVehicleEditor(state: GameState): void {
 
     setDrawClip(null);
     drawBuildingSidebar(
-        layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]),
+        layoutSidebar(GAME_HEIGHT, selectedTab, TILE_CATALOG[selectedTab]),
         selectedTile,
     );
+    drawVehicleDetailsSidebar(state.playerData.vehicle, selectedTile);
 }

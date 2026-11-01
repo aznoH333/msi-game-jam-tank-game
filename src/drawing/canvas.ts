@@ -1,29 +1,76 @@
+export const GAME_WIDTH = 1920;
+export const GAME_HEIGHT = 1080;
+
+let canvasElement: HTMLCanvasElement | null = null;
 let activeContext: CanvasRenderingContext2D | null = null;
+let appliedViewWidth = -1;
+let appliedViewHeight = -1;
+let appliedDpr = -1;
+
+/** Keep a 16:9 frame fitted inside the window, with black bars outside it. */
+export function fitCanvasToView(): void {
+    if (!canvasElement || !activeContext) {
+        return;
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const viewWidth = window.innerWidth;
+    const viewHeight = window.innerHeight;
+    if (viewWidth === appliedViewWidth && viewHeight === appliedViewHeight && dpr === appliedDpr) {
+        return;
+    }
+    appliedViewWidth = viewWidth;
+    appliedViewHeight = viewHeight;
+    appliedDpr = dpr;
+
+    const bitmapWidth = Math.floor(GAME_WIDTH * dpr);
+    const bitmapHeight = Math.floor(GAME_HEIGHT * dpr);
+    if (canvasElement.width !== bitmapWidth || canvasElement.height !== bitmapHeight) {
+        canvasElement.width = bitmapWidth;
+        canvasElement.height = bitmapHeight;
+        activeContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // largest 16:9 rectangle that fits, centered in the leftover space
+    const scale = Math.min(viewWidth / GAME_WIDTH, viewHeight / GAME_HEIGHT);
+    const displayWidth = GAME_WIDTH * scale;
+    const displayHeight = GAME_HEIGHT * scale;
+    canvasElement.style.width = `${displayWidth}px`;
+    canvasElement.style.height = `${displayHeight}px`;
+    canvasElement.style.left = `${(viewWidth - displayWidth) / 2}px`;
+    canvasElement.style.top = `${(viewHeight - displayHeight) / 2}px`;
+}
 
 export function initCanvas(): void {
-    const canvasElement = document.querySelector<HTMLCanvasElement>("#game");
-    if (!canvasElement) {
+    const element = document.querySelector<HTMLCanvasElement>("#game");
+    if (!element) {
         throw new Error("Missing #game canvas");
     }
 
-    const renderingContext = canvasElement.getContext("2d");
+    const renderingContext = element.getContext("2d");
     if (!renderingContext) {
         throw new Error("2D canvas is unavailable");
     }
 
-    const canvas: HTMLCanvasElement = canvasElement;
-    const context: CanvasRenderingContext2D = renderingContext;
+    canvasElement = element;
+    activeContext = renderingContext;
+    fitCanvasToView();
+    window.addEventListener("resize", fitCanvasToView);
+}
 
-    const resize = (): void => {
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(window.innerWidth * dpr);
-        canvas.height = Math.floor(window.innerHeight * dpr);
-        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+/** Map a browser pixel into the fixed 1920×1080 game frame. */
+export function clientToGame(clientX: number, clientY: number): { x: number; y: number } {
+    if (!canvasElement) {
+        return { x: clientX, y: clientY };
+    }
+    const rect = canvasElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+        return { x: clientX, y: clientY };
+    }
+    return {
+        x: (clientX - rect.left) * (GAME_WIDTH / rect.width),
+        y: (clientY - rect.top) * (GAME_HEIGHT / rect.height),
     };
-
-    window.addEventListener("resize", resize);
-    resize();
-    activeContext = context;
 }
 
 export function getCanvasContext(): CanvasRenderingContext2D {
@@ -38,7 +85,7 @@ export function clearCanvas(): void {
 
     // fill the frame with the background color
     context.fillStyle = "#111318";
-    context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+    context.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 }
 
 export interface DrawClip {

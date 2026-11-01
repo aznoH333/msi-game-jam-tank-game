@@ -24,6 +24,9 @@ export interface BaseTile{
     width: number;
     height: number;
     
+    powerCapacity?: number;
+    powerGenerationPerSecond?: number;
+
     /** This is used as the turret sprite. If undefined the tile has no turret */
     turretSprite?: string;
 }

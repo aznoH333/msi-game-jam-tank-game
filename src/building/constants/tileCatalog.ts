@@ -19,6 +19,38 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
         },
+        {
+            tileName: "Small battery",
+            type: "UTILITY",
+            tileSprite: "tiles/debug_battery_small",
+            width: 1,
+            height: 1,
+            powerCapacity: 50,
+        },
+        {
+            tileName: "Small generator",
+            type: "UTILITY",
+            tileSprite: "tiles/debug_generator_small",
+            width: 1,
+            height: 1,
+            powerGenerationPerSecond: 5,
+        },
+        {
+            tileName: "Big battery",
+            type: "UTILITY",
+            tileSprite: "tiles/debug_battery_big",
+            width: 2,
+            height: 2,
+            powerCapacity: 250,
+        },
+        {
+            tileName: "Big generator",
+            type: "UTILITY",
+            tileSprite: "tiles/debug_generator_big",
+            width: 2,
+            height: 2,
+            powerGenerationPerSecond: 25,
+        }
     ],
     "BLOCK": [
         {

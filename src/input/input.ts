@@ -1,3 +1,5 @@
+import { clientToGame, GAME_HEIGHT } from "../drawing/canvas";
+
 const MOUSE_BUTTON_FROM_MASK: { mask: number; button: number }[] = [
     { mask: 1, button: 0 },
     { mask: 4, button: 1 },
@@ -12,8 +14,9 @@ const heldKeys = new Set<string>();
 let listening = false;
 
 function trackPointer(event: PointerEvent): void {
-    mouseX = event.clientX;
-    mouseY = event.clientY;
+    const game = clientToGame(event.clientX, event.clientY);
+    mouseX = game.x;
+    mouseY = game.y;
 
     heldMouseButtons.clear();
     for (const entry of MOUSE_BUTTON_FROM_MASK) {
@@ -43,7 +46,7 @@ export function startInput(): void {
         if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
             scale = 16;
         } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
-            scale = window.innerHeight;
+            scale = GAME_HEIGHT;
         }
         wheelDeltaY += event.deltaY * scale;
         event.preventDefault();
