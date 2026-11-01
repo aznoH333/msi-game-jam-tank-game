@@ -126,9 +126,9 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
     }
 
     const iconSize = 40;
-    const iconScale = iconSize / TILE_SIZE_PX;
 
     for (const entry of layout.entries) {
+        const iconScale = iconSize / (Math.max(entry.tile.width, entry.tile.height) * TILE_SIZE_PX);
         const selectedEntry = entry.tile === selected;
         drawRect({
             x: entry.bounds.x,
@@ -149,20 +149,29 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             });
         }
 
+        const iconX = entry.bounds.x + 12 + iconSize / 2;
+        const iconY = entry.bounds.y + entry.bounds.height / 2;
         drawSprite({
             sprite: entry.tile.tileSprite,
-            x: entry.bounds.x + 12 + iconSize / 2,
-            y: entry.bounds.y + entry.bounds.height / 2,
+            x: iconX,
+            y: iconY,
             scaleX: iconScale,
             scaleY: iconScale,
             zIndex: 3,
         });
+        if (entry.tile.turretSprite) {
+            drawSprite({
+                sprite: entry.tile.turretSprite,
+                x: iconX,
+                y: iconY,
+                scaleX: iconScale,
+                scaleY: iconScale,
+                zIndex: 4,
+            });
+        }
 
-        // part name from the sprite path
-        const spriteName = entry.tile.tileSprite.split("/").pop() ?? entry.tile.tileSprite;
-        const label = spriteName.replace(/^debug_tiles_/, "").replace(/^debug_/, "").replaceAll("_", " ");
         drawText({
-            text: label,
+            text: entry.tile.tileName,
             x: entry.bounds.x + 12 + iconSize + 12,
             y: entry.bounds.y + entry.bounds.height / 2,
             font: "16px sans-serif",

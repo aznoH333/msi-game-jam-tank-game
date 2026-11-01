@@ -2,6 +2,7 @@ import { drawRect, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
+import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds } from "../ui/buildingSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { TILE_SIZE_PX, type BaseTile, type TileType } from "./types/tiles";
@@ -20,9 +21,6 @@ interface GridGeometry {
 
 let selectedTab: TileType = "BLOCK";
 let selectedTile: BaseTile | null = TILE_CATALOG.BLOCK[0] ?? null;
-let cursorX = -1;
-let cursorY = -1;
-let inputInstalled = false;
 
 function vehicleGridGeometry(): GridGeometry {
     const width = GRID_COLUMNS * CELL_SIZE_PX;
@@ -52,129 +50,110 @@ function cellAt(grid: GridGeometry, x: number, y: number): { x: number; y: numbe
 }
 
 function drawTileSprite(
-    sprite: string,
+    tile: BaseTile,
     cellX: number,
     cellY: number,
-    width: number,
-    height: number,
     grid: GridGeometry,
     zIndex: number,
     alpha = 1,
     color?: string,
 ): void {
     const scale = grid.cell / TILE_SIZE_PX;
+    const x = grid.x + (cellX + tile.width / 2) * grid.cell;
+    const y = grid.y + (cellY + tile.height / 2) * grid.cell;
     drawSprite({
-        sprite,
-        x: grid.x + (cellX + width / 2) * grid.cell,
-        y: grid.y + (cellY + height / 2) * grid.cell,
+        sprite: tile.tileSprite,
+        x,
+        y,
         scaleX: scale,
         scaleY: scale,
         zIndex,
         alpha,
         color,
     });
+
+    // turret sits on top of the base, in the same pixel scale
+    if (tile.turretSprite) {
+        drawSprite({
+            sprite: tile.turretSprite,
+            x,
+            y,
+            scaleX: scale,
+            scaleY: scale,
+            zIndex: zIndex + 1,
+            alpha,
+            color,
+        });
+    }
 }
 
-export function installVehicleEditorInput(getState: () => GameState): void {
-    if (inputInstalled) {
-        return;
-    }
-    inputInstalled = true;
+export function updateVehicleEditor(state: GameState): void {
+    const mouse = getMousePosition();
+    const grid = vehicleGridGeometry();
+    const layout = layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]);
+    const hover = cellAt(grid, mouse.x, mouse.y);
 
-    window.addEventListener("pointermove", (event) => {
-        cursorX = event.clientX;
-        cursorY = event.clientY;
-    });
-
-    window.addEventListener("contextmenu", (event) => {
-        if (getState().currentScreen === "BUILDING_SCREEN") {
-            event.preventDefault();
+    // hold right button to erase tiles under the cursor
+    if (isMouseButtonDown(2) && hover) {
+        const index = state.playerData.vehicle.tiles.findIndex((placed) => {
+            return hover.x >= placed.x
+                && hover.x < placed.x + placed.base.width
+                && hover.y >= placed.y
+                && hover.y < placed.y + placed.base.height;
+        });
+        if (index >= 0) {
+            state.playerData.vehicle.tiles.splice(index, 1);
         }
-    });
-
-    window.addEventListener("pointerdown", (event) => {
-        const state = getState();
-        if (state.currentScreen !== "BUILDING_SCREEN") {
-            return;
-        }
-
-        const layout = layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]);
+    } else if (isMouseButtonDown(0)) {
+        let overSidebar = false;
 
         // switch sidebar tab
         for (const tab of layout.tabs) {
-            if (!hits(tab.bounds, event.clientX, event.clientY)) {
+            if (!hits(tab.bounds, mouse.x, mouse.y)) {
                 continue;
             }
             selectedTab = tab.type;
             const tiles = TILE_CATALOG[selectedTab];
             const stillListed = selectedTile !== null && tiles.includes(selectedTile);
             selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
-            return;
+            overSidebar = true;
+            break;
         }
 
         // choose a part to place
-        for (const entry of layout.entries) {
-            if (!hits(entry.bounds, event.clientX, event.clientY)) {
-                continue;
+        if (!overSidebar) {
+            for (const entry of layout.entries) {
+                if (!hits(entry.bounds, mouse.x, mouse.y)) {
+                    continue;
+                }
+                selectedTile = entry.tile;
+                overSidebar = true;
+                break;
             }
-            selectedTile = entry.tile;
-            return;
         }
 
-        const grid = vehicleGridGeometry();
-        const cell = cellAt(grid, event.clientX, event.clientY);
-        if (!cell) {
-            return;
-        }
-
-        const vehicle = state.playerData.vehicle;
-
-        // remove the tile under the cursor
-        if (event.button === 2) {
-            const index = vehicle.tiles.findIndex((placed) => {
-                return cell.x >= placed.x
-                    && cell.x < placed.x + placed.base.width
-                    && cell.y >= placed.y
-                    && cell.y < placed.y + placed.base.height;
+        // hold left button to paint the selected tile
+        if (!overSidebar && hover && selectedTile) {
+            const tileToPlace: BaseTile = selectedTile;
+            const insideGrid = hover.x >= 0
+                && hover.y >= 0
+                && hover.x + tileToPlace.width <= GRID_COLUMNS
+                && hover.y + tileToPlace.height <= GRID_ROWS;
+            const blocked = state.playerData.vehicle.tiles.some((placed) => {
+                return hover.x < placed.x + placed.base.width
+                    && hover.x + tileToPlace.width > placed.x
+                    && hover.y < placed.y + placed.base.height
+                    && hover.y + tileToPlace.height > placed.y;
             });
-            if (index >= 0) {
-                vehicle.tiles.splice(index, 1);
+            if (insideGrid && !blocked) {
+                state.playerData.vehicle.tiles.push({
+                    base: { ...tileToPlace },
+                    x: hover.x,
+                    y: hover.y,
+                });
             }
-            return;
         }
-
-        if (event.button !== 0 || !selectedTile) {
-            return;
-        }
-        const tileToPlace: BaseTile = selectedTile;
-
-        // reject a placement that leaves the grid or covers another tile
-        const insideGrid = cell.x >= 0
-            && cell.y >= 0
-            && cell.x + tileToPlace.width <= GRID_COLUMNS
-            && cell.y + tileToPlace.height <= GRID_ROWS;
-        const blocked = vehicle.tiles.some((placed) => {
-            return cell.x < placed.x + placed.base.width
-                && cell.x + tileToPlace.width > placed.x
-                && cell.y < placed.y + placed.base.height
-                && cell.y + tileToPlace.height > placed.y;
-        });
-        if (!insideGrid || blocked) {
-            return;
-        }
-
-        vehicle.tiles.push({
-            base: { ...tileToPlace },
-            x: cell.x,
-            y: cell.y,
-        });
-    });
-}
-
-export function updateVehicleEditor(state: GameState): void {
-    const grid = vehicleGridGeometry();
-    const layout = layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]);
-    const hover = cellAt(grid, cursorX, cursorY);
+    }
 
     // vehicle pane
     drawRect({
@@ -219,7 +198,7 @@ export function updateVehicleEditor(state: GameState): void {
             height: placed.base.height * grid.cell,
             color: "#2e3648",
         });
-        drawTileSprite(placed.base.tileSprite, placed.x, placed.y, placed.base.width, placed.base.height, grid, 1);
+        drawTileSprite(placed.base, placed.x, placed.y, grid, 1);
     }
 
     // placement preview
@@ -233,23 +212,13 @@ export function updateVehicleEditor(state: GameState): void {
             if (!overlaps) {
                 continue;
             }
-            previewColor = placed.base.tileSprite === selectedTile.tileSprite ? "#8ecbff" : "#ff5c5c";
+            previewColor = placed.base.tileName === selectedTile.tileName ? "#8ecbff" : "#ff5c5c";
             if (previewColor === "#ff5c5c") {
                 break;
             }
         }
 
-        drawTileSprite(
-            selectedTile.tileSprite,
-            hover.x,
-            hover.y,
-            selectedTile.width,
-            selectedTile.height,
-            grid,
-            2,
-            0.45,
-            previewColor,
-        );
+        drawTileSprite(selectedTile, hover.x, hover.y, grid, 3, 0.45, previewColor);
     }
 
     // grid lines
@@ -265,5 +234,8 @@ export function updateVehicleEditor(state: GameState): void {
         }
     }
 
-    drawBuildingSidebar(layout, selectedTile);
+    drawBuildingSidebar(
+        layoutSidebar(window.innerHeight, selectedTab, TILE_CATALOG[selectedTab]),
+        selectedTile,
+    );
 }
