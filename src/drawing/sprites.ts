@@ -17,7 +17,12 @@ type QueuedSprite = {
     scaleX: number;
     scaleY: number;
     rotationRad: number;
+    alpha: number;
+    color?: string;
 };
+
+let tintCanvas: HTMLCanvasElement | null = null;
+let tintContext: CanvasRenderingContext2D | null = null;
 
 const queuedSprites: QueuedSprite[] = [];
 
@@ -49,6 +54,10 @@ export interface DrawCommand {
     scaleX?: number;
     scaleY?: number;
     rotationRad?: number;
+    /** 0 is invisible, 1 is opaque. */
+    alpha?: number;
+    /** Recolors the sprite while keeping its shape. */
+    color?: string;
 }
 
 export function drawSprite({
@@ -59,8 +68,10 @@ export function drawSprite({
     scaleX = 1,
     scaleY = 1,
     rotationRad = 0,
+    alpha = 1,
+    color,
 }: DrawCommand) {
-    queuedSprites.push({ sprite, x, y, zIndex, scaleX, scaleY, rotationRad });
+    queuedSprites.push({ sprite, x, y, zIndex, scaleX, scaleY, rotationRad, alpha, color });
 }
 
 /** Paint sprites queued by drawSprite. Lower zIndex is drawn first. */
@@ -69,6 +80,7 @@ export function renderSprites(): void {
     draws.sort((a, b) => a.zIndex - b.zIndex);
 
     const context = getCanvasContext();
+    context.imageSmoothingEnabled = false;
     for (const draw of draws) {
         const image = loadedSprites.get(draw.sprite);
         if (!image) {
@@ -84,7 +96,29 @@ export function renderSprites(): void {
         context.translate(draw.x, draw.y);
         context.rotate(draw.rotationRad);
         context.scale(draw.scaleX, draw.scaleY);
-        context.drawImage(image, -image.width / 2, -image.height / 2);
+        context.globalAlpha = draw.alpha;
+
+        if (draw.color) {
+            // tint the sprite and keep its shape
+            if (!tintCanvas || !tintContext) {
+                tintCanvas = document.createElement("canvas");
+                tintContext = tintCanvas.getContext("2d");
+            }
+            if (tintContext) {
+                tintCanvas.width = image.width;
+                tintCanvas.height = image.height;
+                tintContext.imageSmoothingEnabled = false;
+                tintContext.globalCompositeOperation = "source-over";
+                tintContext.drawImage(image, 0, 0);
+                tintContext.globalCompositeOperation = "source-atop";
+                tintContext.fillStyle = draw.color;
+                tintContext.fillRect(0, 0, image.width, image.height);
+                context.drawImage(tintCanvas, -image.width / 2, -image.height / 2);
+            }
+        } else {
+            context.drawImage(image, -image.width / 2, -image.height / 2);
+        }
+
         context.restore();
     }
 }

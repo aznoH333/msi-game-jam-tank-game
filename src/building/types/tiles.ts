@@ -1,5 +1,8 @@
 export const TILE_SIZE_PX = 8; // the size of a single building grid cell in pixels
 
+export type TileType = "WEAPON" | "UTILITY" | "BLOCK";
+
+
 /**
  * Represents an unplaced game tile.
  * Holds basic general information about the tile.
@@ -8,6 +11,7 @@ export const TILE_SIZE_PX = 8; // the size of a single building grid cell in pix
  * 
  */
 export interface BaseTile{
+    type: TileType;
     tileSprite: string;
     width: number;
     height: number;

@@ -1,7 +1,7 @@
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
 import { mainMenuUpdate } from "./mainMenu";
-import { PlayerData } from "./playerData";
+import { PlayerData, initPlayerData } from "./playerData";
 
 
 export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN";
@@ -51,10 +51,5 @@ export function updateGame(state: GameState) {
             combatScreenUpdate();
             break;
     }
-}
-
-
-function initPlayerData(): PlayerData {
-    throw new Error("Function not implemented.");
 }
 

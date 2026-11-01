@@ -40,3 +40,77 @@ export function clearCanvas(): void {
     context.fillStyle = "#111318";
     context.fillRect(0, 0, window.innerWidth, window.innerHeight);
 }
+
+interface QueuedRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+    zIndex: number;
+    stroke: boolean;
+    lineWidth: number;
+}
+
+const queuedRects: QueuedRect[] = [];
+
+export interface DrawRectCommand {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+    zIndex?: number;
+}
+
+export function drawRect({
+    x,
+    y,
+    width,
+    height,
+    color,
+    zIndex = 0,
+}: DrawRectCommand): void {
+    queuedRects.push({ x, y, width, height, color, zIndex, stroke: false, lineWidth: 0 });
+}
+
+export interface StrokeRectCommand {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+    lineWidth?: number;
+    zIndex?: number;
+}
+
+export function strokeRect({
+    x,
+    y,
+    width,
+    height,
+    color,
+    lineWidth = 1,
+    zIndex = 0,
+}: StrokeRectCommand): void {
+    queuedRects.push({ x, y, width, height, color, zIndex, stroke: true, lineWidth });
+}
+
+/** Paint rectangles queued by drawRect and strokeRect. Lower zIndex is drawn first. */
+export function renderRects(): void {
+    const draws = queuedRects.splice(0);
+    draws.sort((a, b) => a.zIndex - b.zIndex);
+
+    const context = getCanvasContext();
+    for (const draw of draws) {
+        if (draw.stroke) {
+            context.strokeStyle = draw.color;
+            context.lineWidth = draw.lineWidth;
+            context.strokeRect(draw.x, draw.y, draw.width, draw.height);
+            continue;
+        }
+
+        context.fillStyle = draw.color;
+        context.fillRect(draw.x, draw.y, draw.width, draw.height);
+    }
+}
