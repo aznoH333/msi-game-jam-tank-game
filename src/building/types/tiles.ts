@@ -33,9 +33,7 @@ export interface BaseTile{
     /** the max health of the tile */
     health: number;
 
-
     price: number;
-
     turret?: BaseTurret;
 }
 
@@ -79,6 +77,8 @@ export interface WeaponOverclockSlider {
 }
 
 
+export type ProjectileType = "direct" | "mortar"
+
 /**
  * Represents a turret. Holds information about the turrent doesn't hold information about its state.
  * All time related statistics are listed in seconds
@@ -108,4 +108,7 @@ export interface BaseTurret {
 
     /** How big is the explosion (tiles) */
     explosionRadius: number;
+
+    /** how should the projectile behave */
+    projectileType: ProjectileType
 }

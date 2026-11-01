@@ -1,12 +1,12 @@
-import { TILE_SIZE_PX } from "../building/types/tiles";
-import { getOverclockedTurretStats, getTotalPowerCapacity } from "../building/vehicleUtils";
+import { TILE_SIZE_PX, type ProjectileType } from "../building/types/tiles";
+import { getOverclockedTurretStats, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip } from "../drawing/canvas";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { getGameState } from "../game/gameState";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
-import { ABILITY_BAR_WIDTH, drawAbilityBar, layoutAbilityButtons } from "./abilityBar";
-import { EXPLOSION_DURATION, TANK_SEPARATION } from "./constants";
+import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout, layoutAbilityButtons } from "./abilityBar";
+import { DIRECT_MISS_DISTANCE, EXPLOSION_DURATION, TANK_SEPARATION } from "./constants";
 import {
     aimRotation,
     drawCombatVehicle,
@@ -52,6 +52,9 @@ interface Projectile {
     duration: number;
     explosionRadius: number;
     damage: number;
+    projectileType: ProjectileType;
+    /** The tank that fired this shot. Direct hits ignore its tiles. */
+    owner: Combatant;
 }
 
 interface Explosion {
@@ -76,6 +79,28 @@ let explosions: Explosion[] = [];
 
 function gunsOf(instance: VehicleInstance): TileInstance[] {
     return instance.tiles.filter((part) => part.tile.base.turret !== undefined);
+}
+
+/** Capacity and generation from living parts, using the same base as the builder. */
+function energyBudget(instance: VehicleInstance): { capacity: number; generation: number } {
+    let capacity = getTotalPowerCapacity(instance.base);
+    let generation = getPowerPerSecond(instance.base);
+    for (const part of instance.tiles) {
+        if (part.health > 0) {
+            continue;
+        }
+        capacity -= part.tile.base.powerCapacity ?? 0;
+        generation -= part.tile.base.powerGenerationPerSecond ?? 0;
+    }
+    return {
+        capacity: Math.max(0, capacity),
+        generation: Math.max(0, generation),
+    };
+}
+
+function rechargeEnergy(instance: VehicleInstance, dt: number): void {
+    const budget = energyBudget(instance);
+    instance.power = Math.min(budget.capacity, Math.max(0, instance.power + budget.generation * dt));
 }
 
 function createCombatant(vehicle: BaseVehicle, control: CombatControl): Combatant {
@@ -171,6 +196,7 @@ function updateCombatant(
     input: CombatInput | null,
     ownCamera: CombatCamera | null,
 ): void {
+    rechargeEnergy(combatant.instance, dt);
     if (input?.chosenAbility !== null && input?.chosenAbility !== undefined) {
         combatant.selectedAbility = input.chosenAbility;
     }
@@ -191,7 +217,8 @@ function updateCombatant(
         if (turret) {
             const stats = getOverclockedTurretStats(turret, gun.tile.overclocks);
             const count = Math.max(0, Math.round(stats.salvoCount));
-            if (count > 0) {
+            const cost = Math.max(0, stats.powerPerShot);
+            if (count > 0 && combatant.instance.power >= cost) {
                 selected.shotsLeft = count;
                 selected.timeUntilShot = 0;
                 selected.hasTarget = true;
@@ -214,6 +241,12 @@ function updateCombatant(
         if (runtime.shotsLeft > 0) {
             runtime.timeUntilShot -= dt;
             while (runtime.shotsLeft > 0 && runtime.timeUntilShot <= 0) {
+                const cost = Math.max(0, stats.powerPerShot);
+                if (combatant.instance.power < cost) {
+                    runtime.shotsLeft = 0;
+                    break;
+                }
+                combatant.instance.power -= cost;
                 const origin = tileToWorld(
                     ownCamera,
                     gun.tile.x,
@@ -226,15 +259,27 @@ function updateCombatant(
                 const toX = runtime.targetX + Math.cos(angle) * radius;
                 const toY = runtime.targetY + Math.sin(angle) * radius;
                 const speed = Math.max(0.001, stats.projectileSpeed);
+                const aimDistance = Math.hypot(toX - origin.x, toY - origin.y);
+                let endX = toX;
+                let endY = toY;
+                let travel = aimDistance;
+                if (turret.projectileType === "direct" && aimDistance > 0.001) {
+                    travel = aimDistance + DIRECT_MISS_DISTANCE;
+                    const scale = travel / aimDistance;
+                    endX = origin.x + (toX - origin.x) * scale;
+                    endY = origin.y + (toY - origin.y) * scale;
+                }
                 projectiles.push({
                     fromX: origin.x,
                     fromY: origin.y,
-                    toX,
-                    toY,
+                    toX: endX,
+                    toY: endY,
                     age: 0,
-                    duration: Math.hypot(toX - origin.x, toY - origin.y) / speed,
+                    duration: travel / speed,
                     explosionRadius: Math.max(0, stats.explosionRadius),
                     damage: Math.max(0, stats.damagePerShot),
+                    projectileType: turret.projectileType,
+                    owner: combatant,
                 });
                 runtime.shotsLeft -= 1;
                 if (runtime.shotsLeft > 0 && stats.salvoDelay > 0) {
@@ -249,6 +294,77 @@ function updateCombatant(
             runtime.cooldown = Math.max(0, runtime.cooldown - dt);
         }
     }
+}
+
+/** First time a shot enters a living tile on a tank other than the one that fired it. */
+function earliestTileHit(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    afterT: number,
+    owner: Combatant,
+    targets: { combatant: Combatant; camera: CombatCamera }[],
+): number | null {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    let best: number | null = null;
+    for (const target of targets) {
+        if (target.combatant === owner) {
+            continue;
+        }
+        for (const part of target.combatant.instance.tiles) {
+            if (part.health <= 0) {
+                continue;
+            }
+            const tile = part.tile;
+            const near = localToWorld(target.camera, tile.x, tile.y);
+            const far = localToWorld(target.camera, tile.x + tile.base.width, tile.y + tile.base.height);
+            const minX = Math.min(near.x, far.x);
+            const maxX = Math.max(near.x, far.x);
+            const minY = Math.min(near.y, far.y);
+            const maxY = Math.max(near.y, far.y);
+            let tMin = 0;
+            let tMax = 1;
+            if (Math.abs(dx) < 1e-8) {
+                if (fromX < minX || fromX > maxX) {
+                    continue;
+                }
+            } else {
+                let enter = (minX - fromX) / dx;
+                let exit = (maxX - fromX) / dx;
+                if (enter > exit) {
+                    const swap = enter;
+                    enter = exit;
+                    exit = swap;
+                }
+                tMin = Math.max(tMin, enter);
+                tMax = Math.min(tMax, exit);
+            }
+            if (Math.abs(dy) < 1e-8) {
+                if (fromY < minY || fromY > maxY) {
+                    continue;
+                }
+            } else {
+                let enter = (minY - fromY) / dy;
+                let exit = (maxY - fromY) / dy;
+                if (enter > exit) {
+                    const swap = enter;
+                    enter = exit;
+                    exit = swap;
+                }
+                tMin = Math.max(tMin, enter);
+                tMax = Math.min(tMax, exit);
+            }
+            if (tMin > tMax || tMin <= afterT || tMin > 1) {
+                continue;
+            }
+            if (best === null || tMin < best) {
+                best = tMin;
+            }
+        }
+    }
+    return best;
 }
 
 /** Damage every living tile in range, and let destroyed explosive tiles burst too. */
@@ -424,21 +540,39 @@ export function updateCombat(): void {
 
     // move each shot through world space and show it only on a camera that can see it
     const projectileScale = (playerLayout?.cell ?? 48) / TILE_SIZE_PX * 0.5;
+    const targets: { combatant: Combatant; camera: CombatCamera }[] = [];
+    if (playerCamera) {
+        targets.push({ combatant: player, camera: playerCamera });
+    }
+    if (enemyCamera) {
+        targets.push({ combatant: enemy, camera: enemyCamera });
+    }
     const stillFlying: Projectile[] = [];
     for (const shot of projectiles) {
+        const prevAge = shot.age;
         shot.age += dt;
-        if (shot.age >= shot.duration) {
-            const targets: { combatant: Combatant; camera: CombatCamera }[] = [];
-            if (playerCamera) {
-                targets.push({ combatant: player, camera: playerCamera });
+        const prevT = shot.duration <= 0 ? 1 : Math.min(1, prevAge / shot.duration);
+        const nextT = shot.duration <= 0 ? 1 : Math.min(1, shot.age / shot.duration);
+        let impactT: number | null = shot.projectileType === "mortar" && nextT >= 1 ? 1 : null;
+        if (shot.projectileType === "direct") {
+            const hit = earliestTileHit(shot.fromX, shot.fromY, shot.toX, shot.toY, prevT, shot.owner, targets);
+            if (hit !== null && hit <= nextT) {
+                impactT = hit;
+            } else if (nextT >= 1) {
+                continue;
             }
-            if (enemyCamera) {
-                targets.push({ combatant: enemy, camera: enemyCamera });
-            }
-            detonate(shot.toX, shot.toY, shot.explosionRadius, shot.damage, targets);
+        }
+        if (impactT !== null) {
+            detonate(
+                shot.fromX + (shot.toX - shot.fromX) * impactT,
+                shot.fromY + (shot.toY - shot.fromY) * impactT,
+                shot.explosionRadius,
+                shot.damage,
+                targets,
+            );
             continue;
         }
-        const t = shot.duration <= 0 ? 1 : shot.age / shot.duration;
+        const t = nextT;
         const x = shot.fromX + (shot.toX - shot.fromX) * t;
         const y = shot.fromY + (shot.toY - shot.fromY) * t;
         const worldDx = shot.toX - shot.fromX;
@@ -471,6 +605,8 @@ export function updateCombat(): void {
     }
     explosions = stillBursting;
     setDrawClip(null);
+    rechargeEnergy(player.instance, 0);
+    rechargeEnergy(enemy.instance, 0);
 
     const selectedAbility = player.selectedAbility;
     const gunStates = player.guns;
@@ -479,5 +615,23 @@ export function updateCombat(): void {
         livingGuns.map((entry) => entry.gun),
         selectedLiving,
         livingGuns.map((entry) => gunStates[entry.index].cooldown),
+    );
+    const playerEnergy = energyBudget(player.instance);
+    const enemyEnergy = energyBudget(enemy.instance);
+    drawEnergyReadout(
+        16,
+        GAME_HEIGHT - 72,
+        ABILITY_BAR_WIDTH - 32,
+        player.instance.power,
+        playerEnergy.capacity,
+        playerEnergy.generation,
+    );
+    drawEnergyReadout(
+        enemyView.x + enemyView.width - 220,
+        enemyView.y + 16,
+        200,
+        enemy.instance.power,
+        enemyEnergy.capacity,
+        enemyEnergy.generation,
     );
 }

@@ -294,6 +294,7 @@ export function drawVehicleDetailsSidebar(
         rowY = drawInfoRow(x + PADDING, rowY, "Accuracy", accuracy.text, accuracy.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Reload time", reload.text, reload.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Projectile speed", projectileSpeed.text, projectileSpeed.changed);
+        rowY = drawInfoRow(x + PADDING, rowY, "Projectile type", turret.projectileType === "direct" ? "Direct" : "Mortar");
         drawInfoRow(x + PADDING, rowY, "Explosion radius", explosionRadius.text, explosionRadius.changed);
     } else if (shown.turret) {
         const turret = shown.turret;
@@ -304,6 +305,7 @@ export function drawVehicleDetailsSidebar(
         rowY = drawInfoRow(x + PADDING, rowY, "Accuracy", String(turret.accuracy));
         rowY = drawInfoRow(x + PADDING, rowY, "Reload time", String(turret.reloadTime));
         rowY = drawInfoRow(x + PADDING, rowY, "Projectile speed", String(turret.projectileSpeed));
+        rowY = drawInfoRow(x + PADDING, rowY, "Projectile type", turret.projectileType === "direct" ? "Direct" : "Mortar");
         drawInfoRow(x + PADDING, rowY, "Explosion radius", String(turret.explosionRadius));
     }
 }

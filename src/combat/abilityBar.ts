@@ -135,3 +135,62 @@ export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, co
         }
     }
 }
+
+/** Stored energy, its cap, and how fast living generators refill it. */
+export function drawEnergyReadout(
+    x: number,
+    y: number,
+    width: number,
+    current: number,
+    capacity: number,
+    generation: number,
+): void {
+    const shownCurrent = Math.max(0, current);
+    const shownCapacity = Math.max(0, capacity);
+    drawText({
+        text: "Energy",
+        x,
+        y,
+        font: "16px sans-serif",
+        color: "#d7d5cf",
+        align: "left",
+        baseline: "middle",
+    });
+    drawText({
+        text: `${Math.round(shownCurrent)} / ${Math.round(shownCapacity)}`,
+        x: x + width,
+        y,
+        font: "16px sans-serif",
+        color: "#eceae4",
+        align: "right",
+        baseline: "middle",
+    });
+    drawText({
+        text: `+${Math.round(generation)}/s`,
+        x,
+        y: y + 18,
+        font: "14px sans-serif",
+        color: "#8ecbff",
+        align: "left",
+        baseline: "middle",
+    });
+    const barY = y + 32;
+    const barHeight = 10;
+    drawRect({
+        x,
+        y: barY,
+        width,
+        height: barHeight,
+        color: "#141820",
+    });
+    const ratio = shownCapacity <= 0 ? 0 : Math.min(1, shownCurrent / shownCapacity);
+    if (ratio > 0) {
+        drawRect({
+            x,
+            y: barY,
+            width: Math.max(1, width * ratio),
+            height: barHeight,
+            color: "#3d9ee8",
+        });
+    }
+}

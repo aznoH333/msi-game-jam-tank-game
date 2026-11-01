@@ -15,13 +15,14 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             turret: {
                 turretSprite: "tiles/debug_turret", 
                 accuracy: 2,
-                damagePerShot: 20,
-                powerPerShot: 20,
+                damagePerShot: 40,
+                powerPerShot: 10,
                 salvoCount: 3,
                 salvoDelay: 0.2,
                 reloadTime: 3.5,
-                explosionRadius: 1.5,
-                projectileSpeed: 25,
+                explosionRadius: 1.2,
+                projectileSpeed: 85,
+                projectileType: "direct",
 
                 overClocks: [
                     {
@@ -33,15 +34,41 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         damage: 1.1,
                         powerCost: 1.2,
                     },
+                ]
+            }
+        },
+        {
+            tileName: "Debug mortar",
+            type: "WEAPON",
+            tileSprite: "tiles/debug_turret_base",
+            width: 2,
+            height: 2,
+            price: 10_000,
+            health: 100,
+            explosionDamage: 20,
+            explosionRadius: 2.5,
+            turret: {
+                turretSprite: "tiles/debug_turret", 
+                accuracy: 4,
+                damagePerShot: 20,
+                powerPerShot: 10,
+                salvoCount: 3,
+                salvoDelay: 0.2,
+                reloadTime: 3.5,
+                explosionRadius: 3,
+                projectileSpeed: 40,
+                projectileType: "mortar",
+
+                overClocks: [
                     {
-                        name: "Reload overclock",
-                        baseValue: 1,
-                        minValue: 0.5,
-                        maxValue: 2,
+                        name: "Damage overclock",
+                        baseValue: 0,
+                        minValue: -0.5,
+                        maxValue: 1,
                         stepSize: 0.25,
-                        reloadTime: 0.9,
-                        powerCost: 1.5,
-                    }
+                        damage: 1.1,
+                        powerCost: 1.2,
+                    },
                 ]
             }
         },

@@ -6,3 +6,6 @@ export const COMBAT_CAMERA_ZOOM = 0.65;
 
 /** How long a landing explosion takes to expand and fade, in seconds. */
 export const EXPLOSION_DURATION = 0.2;
+
+/** Tiles a direct shot keeps flying past its aim point before a miss is deleted. */
+export const DIRECT_MISS_DISTANCE = 12;
