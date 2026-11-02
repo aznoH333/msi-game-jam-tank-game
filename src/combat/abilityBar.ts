@@ -1,11 +1,11 @@
-import { DEFEAT_HEALTH_RATIO } from "./constants";
+import { DEFEAT_HEALTH_RATIO, ABILITY_BAR_WIDTH } from "./constants";
 import type { TileInstance } from "./types/tileInstance";
 import { TILE_SIZE_PX } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 
-export const ABILITY_BAR_WIDTH = 300;
+export { ABILITY_BAR_WIDTH };
 
 export interface AbilityButton {
     index: number;
@@ -31,7 +31,23 @@ export function layoutAbilityButtons(count: number): AbilityButton[] {
     return buttons;
 }
 
-export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, cooldowns: number[]): void {
+/** The repair slot sits under the weapon buttons. */
+export function repairButtonBounds(gunCount: number): AbilityButton {
+    return {
+        index: gunCount,
+        x: 16,
+        y: 56 + gunCount * 72,
+        width: ABILITY_BAR_WIDTH - 32,
+        height: 64,
+    };
+}
+
+export function drawAbilityBar(
+    guns: TileInstance[],
+    selectedAbility: number,
+    cooldowns: number[],
+    repair?: { selected: boolean; cooldown: number },
+): void {
     drawRect({
         x: 0,
         y: 0,
@@ -56,7 +72,7 @@ export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, co
         baseline: "middle",
     });
 
-    if (guns.length === 0) {
+    if (guns.length === 0 && !repair) {
         drawText({
             text: "No guns",
             x: 16,
@@ -113,8 +129,9 @@ export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, co
                 zIndex: 4,
             });
         }
+        const hotkey = button.index < 9 ? `${button.index + 1}  ` : "";
         drawText({
-            text: gun.tile.base.tileName,
+            text: `${hotkey}${gun.tile.base.tileName}`,
             x: button.x + 64,
             y: iconY,
             font: "16px sans-serif",
@@ -134,6 +151,48 @@ export function drawAbilityBar(guns: TileInstance[], selectedAbility: number, co
                 baseline: "middle",
             });
         }
+    }
+
+    if (!repair) {
+        return;
+    }
+    const repairButton = repairButtonBounds(guns.length);
+    drawRect({
+        x: repairButton.x,
+        y: repairButton.y,
+        width: repairButton.width,
+        height: repairButton.height,
+        color: repair.selected ? "#343c50" : "#262c3a",
+    });
+    if (repair.selected) {
+        strokeRect({
+            x: repairButton.x + 1,
+            y: repairButton.y + 1,
+            width: repairButton.width - 2,
+            height: repairButton.height - 2,
+            color: "#e6c07b",
+            lineWidth: 2,
+        });
+    }
+    drawText({
+        text: "R  Repair",
+        x: repairButton.x + 16,
+        y: repairButton.y + repairButton.height / 2,
+        font: "16px sans-serif",
+        color: "#8ee0a8",
+        align: "left",
+        baseline: "middle",
+    });
+    if (repair.cooldown > 0) {
+        drawText({
+            text: repair.cooldown.toFixed(1),
+            x: repairButton.x + repairButton.width - 12,
+            y: repairButton.y + repairButton.height / 2,
+            font: "16px sans-serif",
+            color: "#e6c07b",
+            align: "right",
+            baseline: "middle",
+        });
     }
 }
 

@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test": "tsx --test tests/combat.test.ts",
     "export:itch": "npm run build && rm -f tank-game.zip && cd dist && zip -r ../tank-game.zip ."
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "vite": "^6.4.1"
   }

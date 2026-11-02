@@ -1,3 +1,6 @@
+/** Width of the ability column on the combat screen. */
+export const ABILITY_BAR_WIDTH = 300;
+
 /** Tiles from the player tank center to the enemy tank center. */
 export const TANK_SEPARATION = 48;
 
@@ -15,3 +18,18 @@ export const DEFEAT_HEALTH_RATIO = 0.2;
 
 /** Tile radius of the blast that replaces a tank when it loses. */
 export const DEFEAT_EXPLOSION_RADIUS = 5;
+
+/** Tile radius of a repair circle. */
+export const REPAIR_RADIUS = 2.5;
+
+/** Share of a living tile's max health restored each second inside a repair circle. */
+export const REPAIR_HEAL_PER_SECOND = 0.025;
+
+/** How long a repair circle keeps healing, in seconds. */
+export const REPAIR_DURATION = 5;
+
+/** Share of max health a destroyed tile returns with when a repair circle finishes. */
+export const REPAIR_REVIVE_RATIO = 0.1;
+
+/** Seconds before the same vehicle can repair again. */
+export const REPAIR_COOLDOWN = 15;

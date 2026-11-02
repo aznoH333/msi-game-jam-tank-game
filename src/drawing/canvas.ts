@@ -97,7 +97,7 @@ export interface DrawClip {
 
 let activeClip: DrawClip | null = null;
 
-/** Limit later drawRect, drawSprite, and drawText calls to this rectangle. */
+/** Limit later drawRect, drawCircle, drawSprite, and drawText calls to this rectangle. */
 export function setDrawClip(clip: DrawClip | null): void {
     activeClip = clip;
 }
@@ -160,6 +160,78 @@ export function strokeRect({
     zIndex = 0,
 }: StrokeRectCommand): void {
     queuedRects.push({ x, y, width, height, color, zIndex, stroke: true, lineWidth, clip: activeClip });
+}
+
+interface QueuedCircle {
+    x: number;
+    y: number;
+    radius: number;
+    color: string;
+    strokeColor: string;
+    lineWidth: number;
+    zIndex: number;
+    clip: DrawClip | null;
+}
+
+const queuedCircles: QueuedCircle[] = [];
+
+export interface DrawCircleCommand {
+    x: number;
+    y: number;
+    /** Radius in screen pixels. */
+    radius: number;
+    color: string;
+    strokeColor?: string;
+    lineWidth?: number;
+    zIndex?: number;
+}
+
+export function drawCircle({
+    x,
+    y,
+    radius,
+    color,
+    strokeColor = color,
+    lineWidth = 2,
+    zIndex = 0,
+}: DrawCircleCommand): void {
+    if (!(radius > 0)) {
+        return;
+    }
+    queuedCircles.push({
+        x,
+        y,
+        radius,
+        color,
+        strokeColor,
+        lineWidth,
+        zIndex,
+        clip: activeClip,
+    });
+}
+
+/** Paint circles queued by drawCircle. Lower zIndex is drawn first. */
+export function renderCircles(): void {
+    const draws = queuedCircles.splice(0);
+    draws.sort((a, b) => a.zIndex - b.zIndex);
+
+    const context = getCanvasContext();
+    for (const draw of draws) {
+        context.save();
+        if (draw.clip) {
+            context.beginPath();
+            context.rect(draw.clip.x, draw.clip.y, draw.clip.width, draw.clip.height);
+            context.clip();
+        }
+        context.beginPath();
+        context.arc(draw.x, draw.y, draw.radius, 0, Math.PI * 2);
+        context.fillStyle = draw.color;
+        context.fill();
+        context.strokeStyle = draw.strokeColor;
+        context.lineWidth = draw.lineWidth;
+        context.stroke();
+        context.restore();
+    }
 }
 
 /** Paint rectangles queued by drawRect and strokeRect. Lower zIndex is drawn first. */
