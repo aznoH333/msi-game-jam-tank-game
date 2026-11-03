@@ -103,6 +103,8 @@ export interface Battle {
     explosions: Explosion[];
     repairs: RepairCircle[];
     result: "victory" | "defeat" | null;
+    /** Catalog bounty for defeating this enemy. Paid only on victory. */
+    moneyDropped: number;
     enemyActionDelay: number;
     time: number;
 }
@@ -133,6 +135,8 @@ export interface CombatSideState {
 export interface CombatState {
     time: number;
     winner: "player" | "enemy" | null;
+    /** Bounty gained for this fight. Zero until the player wins. */
+    moneyDropped: number;
     player: CombatSideState;
     enemy: CombatSideState;
 }
@@ -241,6 +245,7 @@ export function combatSnapshot(battle: Battle): CombatState {
     return {
         time: battle.time,
         winner: battle.result === "victory" ? "player" : battle.result === "defeat" ? "enemy" : null,
+        moneyDropped: battle.result === "victory" ? battle.moneyDropped : 0,
         player: sideState(battle.player),
         enemy: sideState(battle.enemy),
     };
@@ -652,7 +657,7 @@ function placeRepair(combatant: Combatant, battle: Battle, point: { x: number; y
     combatant.repairCooldown = REPAIR_COOLDOWN;
 }
 
-export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehicle): Battle {
+export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehicle, moneyDropped = 0): Battle {
     return {
         player: createCombatant(playerVehicle, "PLAYER"),
         enemy: createCombatant(enemyVehicle, "ENEMY"),
@@ -660,6 +665,7 @@ export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehic
         explosions: [],
         repairs: [],
         result: null,
+        moneyDropped,
         enemyActionDelay: randomEnemyDelay(),
         time: 0,
     };

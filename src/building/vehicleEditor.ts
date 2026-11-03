@@ -1,13 +1,16 @@
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
-import { drawText } from "../drawing/text";
+import { drawText, measureText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
 import { transitionToNextEvent } from "../gamedirector/gamedirector";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
+import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
+import { adjustOverclock, modulesInTile } from "./vehicleUtils";
+import { brokenVehicleRules, type VehicleRuleFailure } from "./vehicleRules";
 import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
@@ -32,7 +35,6 @@ interface GridGeometry {
 let selectedTab: EditorTab = "BLOCK";
 let selectedTile: BaseTile | null = TILE_CATALOG.BLOCK[0] ?? null;
 let selectedOverclockTile: PlacedTile | null = null;
-let draggedOverclock = -1;
 let editorLeftWasDown = false;
 let zoom = 1;
 let cameraX = 0;
@@ -75,6 +77,51 @@ function copyButtonBounds(paneWidth: number): Bounds {
         width: 120,
         height: 40,
     };
+}
+
+function drawLaunchControl(launch: Bounds, failures: VehicleRuleFailure[]): void {
+    const ready = failures.length === 0;
+    drawRect({
+        x: launch.x,
+        y: launch.y,
+        width: launch.width,
+        height: launch.height,
+        color: ready ? "#2f9e44" : "#2a3040",
+    });
+    drawText({
+        text: "GO",
+        x: launch.x + launch.width / 2,
+        y: launch.y + launch.height / 2,
+        font: "22px sans-serif",
+        color: ready ? "#f4fff6" : "#8b919c",
+        align: "center",
+        baseline: "middle",
+    });
+
+    const font = "16px sans-serif";
+    for (let index = 0; index < failures.length; index++) {
+        const text = failures[index].explanation;
+        const width = measureText(text, font) + 24;
+        const height = 28;
+        const x = launch.x + launch.width - width;
+        const y = launch.y - 8 - (failures.length - index) * (height + 6);
+        drawRect({
+            x,
+            y,
+            width,
+            height,
+            color: "#3a2428",
+        });
+        drawText({
+            text,
+            x: x + width - 12,
+            y: y + height / 2,
+            font,
+            color: "#f0a198",
+            align: "right",
+            baseline: "middle",
+        });
+    }
 }
 
 function copyVehicleJson(vehicle: BaseVehicle): void {
@@ -224,7 +271,7 @@ export function updateVehicleEditor(state: GameState): void {
     const leftPressed = leftDown && !editorLeftWasDown;
     const goButton = goButtonBounds(paneWidth);
     const copyButton = copyButtonBounds(paneWidth);
-    if (leftPressed && hits(goButton, mouse.x, mouse.y)) {
+    if (leftPressed && brokenVehicleRules(state.playerData.vehicle).length === 0 && hits(goButton, mouse.x, mouse.y)) {
         transitionToNextEvent();
     }
     const copyClicked = cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
@@ -249,6 +296,7 @@ export function updateVehicleEditor(state: GameState): void {
         if (index >= 0) {
             const removed = state.playerData.vehicle.tiles[index];
             state.playerData.money += removed.base.price;
+            state.playerData.overclockModules += modulesInTile(removed);
             state.playerData.vehicle.tiles.splice(index, 1);
         }
     } else if (!panning && leftDown && !copyClicked) {
@@ -272,9 +320,18 @@ export function updateVehicleEditor(state: GameState): void {
         if (selectedTab === "OVERCLOCK") {
             const cards = layoutOverclockCards(selectedOverclockTile);
             if (leftPressed) {
-                const hit = cards.find((card) => hits(card.track, mouse.x, mouse.y));
-                if (hit) {
-                    draggedOverclock = hit.index;
+                const plus = cards.find((card) => hits(card.plus, mouse.x, mouse.y));
+                const minus = cards.find((card) => hits(card.minus, mouse.x, mouse.y));
+                const stepped = plus ?? minus;
+                const instance = stepped && selectedOverclockTile
+                    ? selectedOverclockTile.overclocks[stepped.index]
+                    : undefined;
+                if (stepped && instance) {
+                    const adjusted = adjustOverclock(instance, plus ? 1 : -1, state.playerData.overclockModules);
+                    if (adjusted) {
+                        instance.value = adjusted.value;
+                        state.playerData.overclockModules = adjusted.modules;
+                    }
                 } else if (!overSidebar && hover) {
                     const turret = state.playerData.vehicle.tiles.find((placed) => {
                         return hover.x >= placed.x
@@ -285,21 +342,6 @@ export function updateVehicleEditor(state: GameState): void {
                             && placed.base.turret.overClocks.length > 0;
                     });
                     selectedOverclockTile = turret ?? null;
-                }
-            }
-
-            // drag the grabbed overclock slider and snap it to its step
-            if (draggedOverclock >= 0 && selectedOverclockTile) {
-                const card = cards[draggedOverclock];
-                const instance = selectedOverclockTile.overclocks[draggedOverclock];
-                if (card && instance && card.track.width > 0) {
-                    const slider = instance.base;
-                    const span = slider.maxValue - slider.minValue;
-                    const along = Math.min(1, Math.max(0, (mouse.x - card.track.x) / card.track.width));
-                    const raw = slider.minValue + along * span;
-                    const steps = slider.stepSize === 0 ? 0 : Math.round((raw - slider.minValue) / slider.stepSize);
-                    const snapped = slider.minValue + steps * slider.stepSize;
-                    instance.value = Number(Math.min(slider.maxValue, Math.max(slider.minValue, snapped)).toFixed(4));
                 }
             }
         } else {
@@ -345,9 +387,6 @@ export function updateVehicleEditor(state: GameState): void {
         }
     }
 
-    if (!leftDown) {
-        draggedOverclock = -1;
-    }
     editorLeftWasDown = leftDown;
 
     // vehicle pane, clipped so the grid cannot paint over the sidebar
@@ -477,33 +516,16 @@ export function updateVehicleEditor(state: GameState): void {
     setDrawClip(null);
     drawBuildingSidebar(layout, selectedTile);
     if (selectedTab === "OVERCLOCK") {
-        drawOverclockPanel(selectedOverclockTile);
+        drawOverclockPanel(selectedOverclockTile, state.playerData.overclockModules);
     }
     drawVehicleDetailsSidebar(
         state.playerData.vehicle,
         selectedTile,
-        state.playerData.money,
         selectedTab === "OVERCLOCK" ? selectedOverclockTile : undefined,
     );
+    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
 
-    // start the next event
-    const launch = goButtonBounds(paneWidth);
-    drawRect({
-        x: launch.x,
-        y: launch.y,
-        width: launch.width,
-        height: launch.height,
-        color: "#2f9e44",
-    });
-    drawText({
-        text: "GO",
-        x: launch.x + launch.width / 2,
-        y: launch.y + launch.height / 2,
-        font: "22px sans-serif",
-        color: "#f4fff6",
-        align: "center",
-        baseline: "middle",
-    });
+    drawLaunchControl(goButtonBounds(paneWidth), brokenVehicleRules(state.playerData.vehicle));
 
     if (!cheatEnabled) {
         return;

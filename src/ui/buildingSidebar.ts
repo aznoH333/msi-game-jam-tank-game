@@ -1,9 +1,11 @@
+import { ABILITY_BAR_WIDTH } from "../combat/constants";
 import { drawRect, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import { TILE_SIZE_PX, type BaseTile, type TileType } from "../building/types/tiles";
 
-export const SIDEBAR_WIDTH = 380;
+/** Matches the combat ability bar so the two left sidebars line up. */
+export const SIDEBAR_WIDTH = ABILITY_BAR_WIDTH;
 export const SIDEBAR_CONTENT_TOP = 68;
 
 export type EditorTab = TileType | "OVERCLOCK";

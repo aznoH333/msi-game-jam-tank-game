@@ -6,7 +6,7 @@ import { drawText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
 import { getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
-import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout } from "./abilityBar";
+import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
 import { drawCombatVehicle } from "./combatView";
 import type { VehicleInstance } from "./types/vehicleInstance";
 
@@ -89,14 +89,13 @@ export function updateTravel(): void {
 
     const guns = vehicle.tiles.filter((part) => part.tile.base.turret !== undefined);
     drawAbilityBar(guns, -1, guns.map(() => 0));
-    drawEnergyReadout(
-        16,
-        GAME_HEIGHT - 72,
-        ABILITY_BAR_WIDTH - 32,
+    drawViewEnergy(
+        playerView,
         vehicle.power,
         getTotalPowerCapacity(vehicle.base),
         getPowerPerSecond(vehicle.base),
     );
+    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
 
     const mouse = getMousePosition();
     const leftDown = isMouseButtonDown(0);

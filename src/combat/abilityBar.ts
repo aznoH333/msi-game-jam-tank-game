@@ -4,6 +4,7 @@ import { TILE_SIZE_PX } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
+import { drawModuleReadout, drawMoneyReadout } from "../ui/moneyReadout";
 
 export { ABILITY_BAR_WIDTH };
 
@@ -242,6 +243,24 @@ export function drawHealthBar(x: number, y: number, width: number, ratio: number
         height: barHeight,
         color: "#e6c07b",
     });
+}
+
+/** Top-right of a tank view. The player and the enemy use the same corner. */
+export function drawViewEnergy(
+    view: { x: number; y: number; width: number },
+    current: number,
+    capacity: number,
+    generation: number,
+): void {
+    drawEnergyReadout(view.x + view.width - 220, view.y + 16, 200, current, capacity, generation);
+}
+
+/** Money at the bottom of the left sidebar, with the module count stacked above it. */
+export function drawAbilityBarMoney(money: number, modules: number): void {
+    const width = ABILITY_BAR_WIDTH - 32;
+    const moneyY = GAME_HEIGHT - 72;
+    drawModuleReadout(16, moneyY - 32, width, modules);
+    drawMoneyReadout(16, moneyY, width, money);
 }
 
 /** Stored energy, its cap, and how fast living generators refill it. */

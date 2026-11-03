@@ -1,4 +1,4 @@
-import type { BaseTurret, WeaponOverclockInstance } from "./types/tiles";
+import type { BaseTurret, PlacedTile, WeaponOverclockInstance } from "./types/tiles";
 import { BaseVehicle } from "./types/vehicle";
 
 export interface TurretCombatStats {
@@ -77,4 +77,42 @@ export function getPowerPerSecond(vehicle: BaseVehicle): number {
     }
 
     return output;
+}
+
+/** Modules installed on this slider. Only steps above the stock value cost a module. */
+export function overclockModulesUsed(instance: WeaponOverclockInstance): number {
+    const step = instance.base.stepSize;
+    if (step === 0) {
+        return 0;
+    }
+    return Math.max(0, Math.round((instance.value - instance.base.baseValue) / step));
+}
+
+/** Modules to give back when this part is sold. */
+export function modulesInTile(tile: PlacedTile): number {
+    return tile.overclocks.reduce((sum, overclock) => sum + overclockModulesUsed(overclock), 0);
+}
+
+/**
+ * Move one step. A step that adds a module costs one. A step that removes a module refunds it.
+ * Tuning at or below the stock value does not pay modules out.
+ */
+export function adjustOverclock(
+    instance: WeaponOverclockInstance,
+    direction: 1 | -1,
+    modules: number,
+): { value: number; modules: number } | null {
+    const slider = instance.base;
+    if (slider.stepSize === 0) {
+        return null;
+    }
+    const next = Number((instance.value + direction * slider.stepSize).toFixed(4));
+    if (next > slider.maxValue || next < slider.minValue) {
+        return null;
+    }
+    const cost = overclockModulesUsed({ base: slider, value: next }) - overclockModulesUsed(instance);
+    if (cost > modules) {
+        return null;
+    }
+    return { value: next, modules: modules - cost };
 }

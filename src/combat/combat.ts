@@ -7,7 +7,7 @@ import { getGameState } from "../game/gameState";
 import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
 import { loseCombat, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
-import { ABILITY_BAR_WIDTH, drawAbilityBar, drawEnergyReadout, drawHealthBar, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
+import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawHealthBar, drawViewEnergy, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
 import {
     battleView,
     createBattle,
@@ -40,6 +40,7 @@ const WEAPON_KEY_COUNT = 9;
 
 let encounterEvent = -1;
 let battle: Battle | null = null;
+let moneyAwarded = false;
 let leftWasDown = false;
 let lastUpdateMs = 0;
 let targetingRepair = false;
@@ -120,7 +121,6 @@ function drawWorldProjectile(
     worldY: number,
     worldDx: number,
     worldDy: number,
-    scale: number,
 ): void {
     const screen = worldToScreen(camera, worldX, worldY);
     const view = camera.view;
@@ -132,6 +132,7 @@ function drawWorldProjectile(
     ) {
         return;
     }
+    const scale = camera.layout.cell / TILE_SIZE_PX * 0.5;
     const previousClip = getDrawClip();
     setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
     drawSprite({
@@ -183,7 +184,9 @@ export function updateCombat(): void {
     const state = getGameState();
     if (!battle || encounterEvent !== state.gameDirector.eventIndex) {
         encounterEvent = state.gameDirector.eventIndex;
-        battle = createBattle(state.playerData.vehicle, pickEnemyVehicle(encounterEvent));
+        const picked = pickEnemyVehicle(encounterEvent);
+        moneyAwarded = false;
+        battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
         targetingRepair = false;
         lastUpdateMs = performance.now();
     }
@@ -284,10 +287,13 @@ export function updateCombat(): void {
         repair: repairAt,
     };
     stepBattle(fight, dt, { player: playerOrders, enemy: null, enemyAi: !fightOver });
+    if (fight.result === "victory" && !moneyAwarded) {
+        state.playerData.money += fight.moneyDropped;
+        moneyAwarded = true;
+    }
 
     const turretRotations = turretAimRotations(player, playerCamera, mouseWorld);
     const enemyRotations = turretAimRotations(enemy, enemyCamera, null);
-    const projectileScale = (playerCamera?.layout.cell ?? 48) / TILE_SIZE_PX * 0.5;
     for (const shot of fight.projectiles) {
         const progress = shot.duration <= 0 ? 1 : Math.min(1, shot.age / shot.duration);
         const x = shot.fromX + (shot.toX - shot.fromX) * progress;
@@ -295,10 +301,10 @@ export function updateCombat(): void {
         const worldDx = shot.toX - shot.fromX;
         const worldDy = shot.toY - shot.fromY;
         if (playerCamera) {
-            drawWorldProjectile(playerCamera, x, y, worldDx, worldDy, projectileScale);
+            drawWorldProjectile(playerCamera, x, y, worldDx, worldDy);
         }
         if (enemyCamera) {
-            drawWorldProjectile(enemyCamera, x, y, worldDx, worldDy, projectileScale);
+            drawWorldProjectile(enemyCamera, x, y, worldDx, worldDy);
         }
     }
 
@@ -357,22 +363,9 @@ export function updateCombat(): void {
     );
     const playerEnergy = energyBudget(player.instance);
     const enemyEnergy = energyBudget(enemy.instance);
-    drawEnergyReadout(
-        16,
-        GAME_HEIGHT - 72,
-        ABILITY_BAR_WIDTH - 32,
-        player.instance.power,
-        playerEnergy.capacity,
-        playerEnergy.generation,
-    );
-    drawEnergyReadout(
-        enemyView.x + enemyView.width - 220,
-        enemyView.y + 16,
-        200,
-        enemy.instance.power,
-        enemyEnergy.capacity,
-        enemyEnergy.generation,
-    );
+    drawViewEnergy(playerView, player.instance.power, playerEnergy.capacity, playerEnergy.generation);
+    drawViewEnergy(enemyView, enemy.instance.power, enemyEnergy.capacity, enemyEnergy.generation);
+    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
     const playerHealth = healthRatio(player.instance);
     const enemyHealth = healthRatio(enemy.instance);
     drawHealthBar(playerView.x + 24, playerView.y + 52, 240, playerHealth ?? 0);

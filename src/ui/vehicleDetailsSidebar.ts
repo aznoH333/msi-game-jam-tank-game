@@ -102,7 +102,6 @@ export function updateVehicleNameInput(vehicle: BaseVehicle): void {
 export function drawVehicleDetailsSidebar(
     vehicle: BaseVehicle,
     selected: BaseTile | null,
-    money: number,
     overclockTile?: PlacedTile | null,
 ): void {
     const x = GAME_WIDTH - DETAILS_SIDEBAR_WIDTH;
@@ -196,8 +195,7 @@ export function drawVehicleDetailsSidebar(
     let rowY = field.y + field.height + 16;
     rowY = drawInfoRow(x + PADDING, rowY, "Power capacity", String(getTotalPowerCapacity(vehicle)));
     rowY = drawInfoRow(x + PADDING, rowY, "Power generation", String(getPowerPerSecond(vehicle)));
-    rowY = drawInfoRow(x + PADDING, rowY, "Tile count", String(vehicle.tiles.length));
-    drawInfoRow(x + PADDING, rowY, "Money", String(money));
+    drawInfoRow(x + PADDING, rowY, "Tile count", String(vehicle.tiles.length));
 
     const overclockMode = overclockTile !== undefined;
     const shown = overclockMode ? overclockTile?.base ?? null : selected;

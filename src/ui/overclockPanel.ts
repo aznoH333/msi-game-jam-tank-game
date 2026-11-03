@@ -1,4 +1,4 @@
-import { getOverclockedTurretStats, type TurretCombatStats } from "../building/vehicleUtils";
+import { adjustOverclock, getOverclockedTurretStats, type TurretCombatStats } from "../building/vehicleUtils";
 import type { PlacedTile } from "../building/types/tiles";
 import { drawRect } from "../drawing/canvas";
 import { drawText, measureText } from "../drawing/text";
@@ -19,9 +19,33 @@ const EFFECT_FIELDS: {
     { key: "explosionRadius", stat: "explosionRadius", label: "Explosion radius" },
 ];
 
+const BUTTON_SIZE = 28;
+const BUTTON_GAP = 8;
+
 export interface OverclockCard {
     index: number;
     track: Bounds;
+    minus: Bounds;
+    plus: Bounds;
+}
+
+function drawStepButton(bounds: Bounds, label: string, enabled: boolean): void {
+    drawRect({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        color: enabled ? (label === "+" ? "#2f9e44" : "#343c50") : "#2a3040",
+    });
+    drawText({
+        text: label,
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height / 2,
+        font: "20px sans-serif",
+        color: enabled ? "#f4fff6" : "#6d7380",
+        align: "center",
+        baseline: "middle",
+    });
 }
 
 function formatStat(value: number): string {
@@ -35,24 +59,35 @@ export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[]
 
     const cards: OverclockCard[] = [];
     let y = SIDEBAR_CONTENT_TOP;
-    const width = SIDEBAR_WIDTH - PADDING * 2;
     for (let index = 0; index < placed.overclocks.length; index++) {
         const slider = placed.overclocks[index].base;
         y += 24;
-        const track = { x: PADDING, y, width, height: 18 };
-        y += 28;
+        const minus = { x: PADDING, y, width: BUTTON_SIZE, height: BUTTON_SIZE };
+        const plus = {
+            x: SIDEBAR_WIDTH - PADDING - BUTTON_SIZE,
+            y,
+            width: BUTTON_SIZE,
+            height: BUTTON_SIZE,
+        };
+        const track = {
+            x: minus.x + BUTTON_SIZE + BUTTON_GAP,
+            y: y + (BUTTON_SIZE - 18) / 2,
+            width: plus.x - BUTTON_GAP - (minus.x + BUTTON_SIZE + BUTTON_GAP),
+            height: 18,
+        };
+        y += BUTTON_SIZE;
         for (const field of EFFECT_FIELDS) {
             if (slider[field.key] !== undefined) {
                 y += 22;
             }
         }
         y += 16;
-        cards.push({ index, track });
+        cards.push({ index, track, minus, plus });
     }
     return cards;
 }
 
-export function drawOverclockPanel(placed: PlacedTile | null): void {
+export function drawOverclockPanel(placed: PlacedTile | null, modules: number): void {
     if (!placed?.base.turret) {
         drawText({
             text: "Select a placed turret",
@@ -71,7 +106,7 @@ export function drawOverclockPanel(placed: PlacedTile | null): void {
     for (const card of cards) {
         const instance = placed.overclocks[card.index];
         const adjusted = getOverclockedTurretStats(turret, [instance]);
-        const nameY = card.track.y - 24;
+        const nameY = card.minus.y - 24;
 
         drawText({
             text: instance.base.name,
@@ -117,9 +152,11 @@ export function drawOverclockPanel(placed: PlacedTile | null): void {
             height: card.track.height + 4,
             color: "#e6c07b",
         });
+        drawStepButton(card.minus, "-", adjustOverclock(instance, -1, modules) !== null);
+        drawStepButton(card.plus, "+", adjustOverclock(instance, 1, modules) !== null);
 
         // this slider's stat effects: base value, then the overclocked value
-        let effectY = card.track.y + card.track.height + 10;
+        let effectY = card.minus.y + card.minus.height + 10;
         for (const field of EFFECT_FIELDS) {
             if (instance.base[field.key] === undefined) {
                 continue;

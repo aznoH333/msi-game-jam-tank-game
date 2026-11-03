@@ -6,8 +6,11 @@ import type { VehicleInstance } from "./types/vehicleInstance";
 import {
     combatTileCenter,
     layoutCombatVehicle,
+    type CombatVehicleLayout,
     type CombatViewport,
 } from "./combatLayout";
+
+const DESTROYED_TILE_SPRITE = "tiles/debug_tile_destroyed";
 
 export {
     aimRotation,
@@ -64,10 +67,11 @@ export function drawCombatVehicle(
 
     const footprintCenterY = layout.originY + (layout.minY + layout.maxY) / 2 * layout.cell;
     instance.tiles.forEach((part, index) => {
+        const tile = part.tile;
         if (part.health <= 0) {
+            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
             return;
         }
-        const tile = part.tile;
         const maxHealth = tile.base.health;
         const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, part.health) / maxHealth;
         // full color at full health, 30% of each channel when health is gone
@@ -117,6 +121,31 @@ export function drawCombatVehicle(
             });
         }
     });
+}
+
+/** The wreck sprite is one cell. Stamp it across every cell of a larger part. */
+function drawDestroyedTile(
+    layout: CombatVehicleLayout,
+    tileX: number,
+    tileY: number,
+    width: number,
+    height: number,
+    inverted: boolean,
+): void {
+    const scale = layout.cell / TILE_SIZE_PX;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const center = combatTileCenter(layout, tileX + x, tileY + y, 1, 1, inverted);
+            drawSprite({
+                sprite: DESTROYED_TILE_SPRITE,
+                x: center.x,
+                y: center.y,
+                scaleX: scale,
+                scaleY: inverted ? -scale : scale,
+                zIndex: 1,
+            });
+        }
+    }
 }
 
 function scaleColor(hex: string, factor: number): string {

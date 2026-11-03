@@ -24,6 +24,7 @@ interface ScheduledAction extends CombatAction {
 
 /**
  * A scripted fight. Both tanks act only when the script says so.
+ * `moneyDropped` is the bounty paid if the player wins.
  * `run` steps the combat simulation and returns who is left standing.
  */
 export interface CombatMatch {
@@ -37,8 +38,8 @@ export interface CombatMatch {
     state(): CombatState;
 }
 
-export function combatMatch(player: BaseVehicle, enemy: BaseVehicle): CombatMatch {
-    const battle: Battle = createBattle(player, enemy);
+export function combatMatch(player: BaseVehicle, enemy: BaseVehicle, moneyDropped = 0): CombatMatch {
+    const battle: Battle = createBattle(player, enemy, moneyDropped);
     const actions: ScheduledAction[] = [];
     const match: CombatMatch = {
         tile(side, index) {

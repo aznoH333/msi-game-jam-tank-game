@@ -115,6 +115,32 @@ describe("combat loop", () => {
         assert.equal(outcome.player.healthRatio, 1);
     });
 
+    it("pays the enemy bounty when the player wins, and nothing otherwise", () => {
+        const bounty = 3000;
+        const win = combatMatch(
+            vehicle("Player", [gun(0, 0, 90, 10), battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+            bounty,
+        );
+        const enemyTile = win.tile("enemy", 0);
+        assert.equal(win.state().moneyDropped, 0);
+        const won = win.at(0, "player", { fire: { gun: 0, at: enemyTile } }).run(2);
+
+        assert.equal(won.winner, "player");
+        assert.equal(won.moneyDropped, bounty);
+
+        const loss = combatMatch(
+            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Enemy", [gun(0, 0, 90, 10), battery(2, 0)]),
+            bounty,
+        );
+        const playerTile = loss.tile("player", 0);
+        const lost = loss.at(0, "enemy", { fire: { gun: 0, at: playerTile } }).run(2);
+
+        assert.equal(lost.winner, "enemy");
+        assert.equal(lost.moneyDropped, 0);
+    });
+
     it("does not fire a gun that costs more energy than the tank has", () => {
         const match = combatMatch(
             vehicle("Player", [gun(0, 0, 50, 10)]),

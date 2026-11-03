@@ -18,6 +18,7 @@
 
 
 # short term goals.
-- [ ] Add repair ability to combat
-- [ ] Make enemies drop loot
+- [X] Add repair ability to combat
+- [X] Make enemies drop loot
+- [ ] Make overclocks cost new currency
 - [ ] Start working on the first person sections

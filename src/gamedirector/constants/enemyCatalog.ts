@@ -4,7 +4,14 @@ export interface EnemyCatalogRecord {
     fileName: string;
     earliestAppearance: number;
     latestAppearance: number;
+    moneyDropped: number;
 }
+
+export interface PickedEnemy {
+    vehicle: BaseVehicle;
+    moneyDropped: number;
+}
+
 
 const enemyVehicleFiles = import.meta.glob("../../../assets/enemies/*.json", {
     eager: true,
@@ -17,24 +24,26 @@ export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
         fileName: "small_1.json",
         earliestAppearance: 0,
         latestAppearance: 99,
+        moneyDropped: 3000,
 
     },
     {
         fileName: "small_2.json",
         earliestAppearance: 1,
         latestAppearance: 99,
+        moneyDropped: 3500,
     },
     {
         fileName: "medium_1.json",
         earliestAppearance: 3,
         latestAppearance: 99,
-
+        moneyDropped: 5000
     }
 
 ];
 
 /** A catalog tank whose appearance range includes this event. */
-export function pickEnemyVehicle(eventIndex: number): BaseVehicle {
+export function pickEnemyVehicle(eventIndex: number): PickedEnemy {
     const available = ENEMY_CATALOG.filter((record) => {
         return eventIndex >= record.earliestAppearance && eventIndex <= record.latestAppearance;
     });
@@ -46,5 +55,8 @@ export function pickEnemyVehicle(eventIndex: number): BaseVehicle {
     if (!vehicle) {
         throw new Error(`Missing enemy file ${record.fileName}`);
     }
-    return vehicle;
+    return {
+        vehicle,
+        moneyDropped: record.moneyDropped,
+    };
 }
