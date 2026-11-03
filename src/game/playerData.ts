@@ -1,9 +1,13 @@
 import { BaseVehicle } from "../building/types/vehicle";
+import { WeaponName } from "../exploration/constants/weaponCatalog";
 
 export interface PlayerData {
     vehicle: BaseVehicle;
     money: number;
     overclockModules: number;
+    /** Unlocked weapon -> ammo. A missing weapon is locked. */
+    weapons: Partial<Record<WeaponName, number>>;
+    personHealth: number;
 }
 
 /** Initializes empty player data "new game" */
@@ -14,6 +18,11 @@ export function initPlayerData(): PlayerData {
             tiles: []
         },
         money: 20_000,
-        overclockModules: 3,
+        overclockModules: 0,
+        weapons: {
+            "fists": 0, 
+            "pistol": 50,
+        },
+        personHealth: 100,
     }
 }

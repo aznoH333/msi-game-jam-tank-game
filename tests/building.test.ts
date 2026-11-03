@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { buyOffer, shopOffers } from "../src/building/itemShop";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
 import { adjustOverclock, modulesInTile } from "../src/building/vehicleUtils";
 import { brokenVehicleRules } from "../src/building/vehicleRules";
+import { initPlayerData } from "../src/game/playerData";
 
 const NEEDS_GUN = "The vehicle needs a gun.";
 const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not allowed.";
@@ -124,5 +126,55 @@ describe("overclock modules", () => {
         assert.equal(modulesInTile(gun), 2);
         gun.overclocks = [overclock(0)];
         assert.equal(modulesInTile(gun), 0);
+    });
+});
+
+describe("item shop", () => {
+    it("sells purchasable guns, their ammo, and a medpack", () => {
+        const titles = shopOffers().map((offer) => offer.title);
+        assert.deepEqual(titles, [
+            "Medpack",
+            "pistol ammo",
+            "shotgun",
+            "shotgun ammo",
+            "machine gun",
+            "machine gun ammo",
+            "plasma gun",
+        ]);
+    });
+
+    it("buys a medpack up to full health and refuses a second one", () => {
+        const player = initPlayerData();
+        player.personHealth = 40;
+        player.money = 500;
+        const medpack = shopOffers()[0];
+        assert.equal(buyOffer(player, medpack), true);
+        assert.equal(player.personHealth, 100);
+        assert.equal(player.money, 0);
+        assert.equal(buyOffer(player, medpack), false);
+    });
+
+    it("unlocks a gun with no ammo and sells ammo only for guns the player has", () => {
+        const player = initPlayerData();
+        player.money = 20_000;
+        const offers = shopOffers();
+        const shotgun = offers.find((offer) => offer.kind === "weapon" && offer.weapon === "shotgun");
+        const pistolAmmo = offers.find((offer) => offer.kind === "ammo" && offer.weapon === "pistol");
+        const shotgunAmmo = offers.find((offer) => offer.kind === "ammo" && offer.weapon === "shotgun");
+        assert.ok(shotgun);
+        assert.ok(pistolAmmo);
+        assert.ok(shotgunAmmo);
+
+        assert.equal(buyOffer(player, shotgunAmmo), false);
+        assert.equal(buyOffer(player, shotgun), true);
+        assert.equal(player.weapons.shotgun, 0);
+        assert.equal(player.money, 10_000);
+        assert.equal(buyOffer(player, shotgun), false);
+
+        assert.equal(buyOffer(player, pistolAmmo), true);
+        assert.equal(player.weapons.pistol, 60);
+        player.weapons.pistol = 100;
+        assert.equal(buyOffer(player, pistolAmmo), false);
+        assert.equal(player.weapons.pistol, 100);
     });
 });

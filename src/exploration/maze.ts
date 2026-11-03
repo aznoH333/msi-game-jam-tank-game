@@ -1,8 +1,30 @@
-export const MAZE_SIZE = 30;
-const ROOM_COUNT = 6;
+import type { WeaponName } from "./constants/weaponCatalog";
+
+export const MAZE_SIZE = 20;
+const ROOM_COUNT = 5;
 const ROOM_ATTEMPTS = 200;
+const MONEY_PICKUPS = 5;
+const MODULE_PICKUPS = 1;
+const AMMO_PICKUPS = 5;
+const MONEY_AMOUNT = 1000;
+const MODULE_AMOUNT = 1;
 
 export type MazeCell = "wall" | "floor" | "exit";
+export type PickupKind = "money" | "module" | "ammo";
+
+export interface AmmoSource {
+    weapon: WeaponName;
+    amount: number;
+}
+
+export interface MazePickup {
+    x: number;
+    y: number;
+    kind: PickupKind;
+    amount: number;
+    /** Set for ammo packs. */
+    weapon?: WeaponName;
+}
 
 export interface Maze {
     size: number;
@@ -13,6 +35,7 @@ export interface Maze {
     spawnY: number;
     /** Faces into the maze, away from the exit. Radians, same convention as the 3D camera. */
     spawnYaw: number;
+    pickups: MazePickup[];
 }
 
 export function cellAt(maze: Maze, x: number, y: number): MazeCell {
@@ -26,8 +49,8 @@ export function isWalkable(cell: MazeCell): boolean {
     return cell === "floor" || cell === "exit";
 }
 
-/** A perfect maze on a 30×30 grid, with rectangular rooms carved into it. The exit is one border cell, and the spawn is the floor beside it. */
-export function generateMaze(random: () => number = Math.random): Maze {
+/** A perfect maze with rectangular rooms and scattered pickups. The exit is one border cell, and the spawn is the floor beside it. */
+export function generateMaze(random: () => number = Math.random, ammoSources: readonly AmmoSource[] = []): Maze {
     const size = MAZE_SIZE;
     const cells: MazeCell[] = Array.from({ length: size * size }, () => "wall");
     const at = (x: number, y: number) => y * size + x;
@@ -93,7 +116,54 @@ export function generateMaze(random: () => number = Math.random): Maze {
         spawnX,
         spawnY,
         spawnYaw: yawAwayFrom(exit.x - spawnX, exit.y - spawnY),
+        pickups: placePickups(cells, size, spawnX, spawnY, random, ammoSources),
     };
+}
+
+/** Money, module, and ammo pickups on distinct floor cells, never on the spawn. */
+function placePickups(
+    cells: MazeCell[],
+    size: number,
+    spawnX: number,
+    spawnY: number,
+    random: () => number,
+    ammoSources: readonly AmmoSource[],
+): MazePickup[] {
+    const floors: { x: number; y: number }[] = [];
+    for (let y = 1; y < size - 1; y++) {
+        for (let x = 1; x < size - 1; x++) {
+            if (cells[y * size + x] !== "floor" || (x === spawnX && y === spawnY)) {
+                continue;
+            }
+            floors.push({ x, y });
+        }
+    }
+    for (let index = floors.length - 1; index > 0; index--) {
+        const swap = Math.floor(random() * (index + 1));
+        const cell = floors[index];
+        floors[index] = floors[swap];
+        floors[swap] = cell;
+    }
+    const plan: { kind: PickupKind; amount: number; weapon?: WeaponName }[] = [];
+    for (let index = 0; index < MONEY_PICKUPS; index++) {
+        plan.push({ kind: "money", amount: MONEY_AMOUNT });
+    }
+    for (let index = 0; index < MODULE_PICKUPS; index++) {
+        plan.push({ kind: "module", amount: MODULE_AMOUNT });
+    }
+    if (ammoSources.length > 0) {
+        for (let index = 0; index < AMMO_PICKUPS; index++) {
+            const source = ammoSources[Math.floor(random() * ammoSources.length)];
+            plan.push({ kind: "ammo", amount: source.amount, weapon: source.weapon });
+        }
+    }
+    return plan.slice(0, floors.length).map((pickup, index) => ({
+        x: floors[index].x,
+        y: floors[index].y,
+        kind: pickup.kind,
+        amount: pickup.amount,
+        weapon: pickup.weapon,
+    }));
 }
 
 /** Open rectangles, 3–5 cells on a side, kept off the border and apart from each other. */

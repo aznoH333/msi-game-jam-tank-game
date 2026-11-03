@@ -31,6 +31,14 @@ export interface Billboard3D {
     sprite: string;
 }
 
+export interface DistanceFog {
+    color: string;
+    /** Horizontal distance where the fade begins. */
+    start: number;
+    /** Horizontal distance where the color is fully the fog color. */
+    end: number;
+}
+
 export interface Scene3D {
     viewport: DrawClip;
     camera: Camera3D;
@@ -38,7 +46,14 @@ export interface Scene3D {
     background: string;
     billboards?: Billboard3D[];
     /** Top half of the viewport is sky, bottom half is ground, both behind the triangles. */
-    horizon?: { sky: string; ground: string };
+    horizon?: {
+        sky: string;
+        ground: string;
+        /** Camera height off each plane, so a flat fill can use the same distance fog as the walls. */
+        eyeAboveFloor?: number;
+        eyeBelowCeiling?: number;
+    };
+    fog?: DistanceFog;
 }
 
 const NEAR_PLANE = 0.08;
@@ -60,11 +75,30 @@ let programsReady = false;
 
 let colorProgram: WebGLProgram | null = null;
 let colorViewProj: WebGLUniformLocation | null = null;
+let colorFog = emptyFogUniforms();
 let groundProgram: WebGLProgram | null = null;
 let groundColor: WebGLUniformLocation | null = null;
+let groundFog = emptyFogUniforms();
+let groundEye: WebGLUniformLocation | null = null;
+let groundHalfTan: WebGLUniformLocation | null = null;
+let groundAspect: WebGLUniformLocation | null = null;
+let groundView: WebGLUniformLocation | null = null;
 let spriteProgram: WebGLProgram | null = null;
 let spriteViewProj: WebGLUniformLocation | null = null;
 let spriteSampler: WebGLUniformLocation | null = null;
+let spriteFog = emptyFogUniforms();
+
+interface FogUniforms {
+    color: WebGLUniformLocation | null;
+    start: WebGLUniformLocation | null;
+    end: WebGLUniformLocation | null;
+    enabled: WebGLUniformLocation | null;
+    camera: WebGLUniformLocation | null;
+}
+
+function emptyFogUniforms(): FogUniforms {
+    return { color: null, start: null, end: null, enabled: null, camera: null };
+}
 
 let triBuffer: WebGLBuffer | null = null;
 let groundBuffer: WebGLBuffer | null = null;
@@ -75,22 +109,42 @@ const spriteData = new Float32Array(30);
 const viewProj = new Float32Array(16);
 const textures = new Map<string, WebGLTexture>();
 
+const FOG_SNIPPET = `
+uniform vec3 u_fogColor;
+uniform vec2 u_camera;
+uniform float u_fogStart;
+uniform float u_fogEnd;
+uniform float u_fogEnabled;
+vec3 applyFog(vec3 color, float dist) {
+    if (u_fogEnabled < 0.5) {
+        return color;
+    }
+    float fog = clamp((dist - u_fogStart) / (u_fogEnd - u_fogStart), 0.0, 1.0);
+    return mix(color, u_fogColor, fog);
+}
+`;
+
 const COLOR_VS = `
 attribute vec3 a_position;
 attribute vec3 a_color;
 uniform mat4 u_viewProj;
 varying vec3 v_color;
+varying vec3 v_world;
 void main() {
-    gl_Position = u_viewProj * vec4(a_position, 1.0);
+    v_world = a_position;
     v_color = a_color;
+    gl_Position = u_viewProj * vec4(a_position, 1.0);
 }
 `;
 
 const COLOR_FS = `
 precision mediump float;
 varying vec3 v_color;
+varying vec3 v_world;
+${FOG_SNIPPET}
 void main() {
-    gl_FragColor = vec4(v_color, 1.0);
+    float dist = distance(v_world.xz, u_camera);
+    gl_FragColor = vec4(applyFog(v_color, dist), 1.0);
 }
 `;
 
@@ -104,8 +158,22 @@ void main() {
 const GROUND_FS = `
 precision mediump float;
 uniform vec3 u_color;
+uniform float u_eye;
+uniform float u_halfTan;
+uniform float u_aspect;
+uniform vec4 u_view;
+${FOG_SNIPPET}
 void main() {
-    gl_FragColor = vec4(u_color, 1.0);
+    float dist = u_fogEnd;
+    float ndcY = ((gl_FragCoord.y - u_view.y) / u_view.w) * 2.0 - 1.0;
+    float denom = ndcY * u_halfTan;
+    if (abs(denom) >= 0.0001) {
+        float ahead = abs(u_eye / denom);
+        float ndcX = ((gl_FragCoord.x - u_view.x) / u_view.z) * 2.0 - 1.0;
+        float side = ndcX * ahead * u_halfTan * u_aspect;
+        dist = sqrt(ahead * ahead + side * side);
+    }
+    gl_FragColor = vec4(applyFog(u_color, dist), 1.0);
 }
 `;
 
@@ -114,9 +182,11 @@ attribute vec3 a_position;
 attribute vec2 a_uv;
 uniform mat4 u_viewProj;
 varying vec2 v_uv;
+varying vec3 v_world;
 void main() {
-    gl_Position = u_viewProj * vec4(a_position, 1.0);
+    v_world = a_position;
     v_uv = a_uv;
+    gl_Position = u_viewProj * vec4(a_position, 1.0);
 }
 `;
 
@@ -124,21 +194,20 @@ const SPRITE_FS = `
 precision mediump float;
 uniform sampler2D u_texture;
 varying vec2 v_uv;
+varying vec3 v_world;
+${FOG_SNIPPET}
 void main() {
     vec4 color = texture2D(u_texture, v_uv);
     if (color.a <= 0.5) discard;
-    gl_FragColor = vec4(color.rgb, 1.0);
+    float dist = distance(v_world.xz, u_camera);
+    gl_FragColor = vec4(applyFog(color.rgb, dist), 1.0);
 }
 `;
 
-/** Bottom half of the current viewport, in clip space. */
-const GROUND_VERTS = new Float32Array([
-    -1, -1,
-    1, -1,
-    1, 0,
-    -1, -1,
-    1, 0,
-    -1, 0,
+/** Ground is the bottom half of clip space, sky the top half. */
+const HORIZON_VERTS = new Float32Array([
+    -1, -1, 1, -1, 1, 0, -1, -1, 1, 0, -1, 0,
+    -1, 0, 1, 0, 1, 1, -1, 0, 1, 1, -1, 1,
 ]);
 
 /** Queue a 3D scene. `render3D` paints it before the 2D layers. */
@@ -226,36 +295,50 @@ function paintScene(gpu: WebGLRenderingContext, context: CanvasRenderingContext2
     gpu.enable(gpu.DEPTH_TEST);
     gpu.depthMask(true);
 
-    const clear = parseColor(scene.horizon?.sky ?? scene.background);
+    const clear = parseColor(scene.fog?.color ?? scene.horizon?.sky ?? scene.background);
     gpu.clearColor(clear[0] / 255, clear[1] / 255, clear[2] / 255, 1);
     gpu.clear(gpu.COLOR_BUFFER_BIT | gpu.DEPTH_BUFFER_BIT);
     if (scene.horizon) {
-        paintGround(gpu, scene.horizon.ground);
+        paintHorizon(gpu, scene, vx, vy, vw, vh);
         gpu.enable(gpu.DEPTH_TEST);
         gpu.depthMask(true);
     }
 
     setViewProjection(scene.camera, vw / vh);
-    paintTriangles(gpu, scene.triangles);
-    paintBillboards(gpu, scene.camera, scene.billboards ?? []);
+    paintTriangles(gpu, scene);
+    paintBillboards(gpu, scene);
     // The 2D canvas sits on top. Leave this rectangle transparent so the WebGL frame shows through.
     context.clearRect(view.x, view.y, view.width, view.height);
 }
 
-function paintGround(gpu: WebGLRenderingContext, color: string): void {
-    const [red, green, blue] = parseColor(color);
+function paintHorizon(gpu: WebGLRenderingContext, scene: Scene3D, vx: number, vy: number, vw: number, vh: number): void {
+    const horizon = scene.horizon;
+    if (!horizon) {
+        return;
+    }
     gpu.disable(gpu.DEPTH_TEST);
     gpu.depthMask(false);
     gpu.useProgram(groundProgram);
-    gpu.uniform3f(groundColor, red / 255, green / 255, blue / 255);
+    bindFog(gpu, groundFog, scene.fog, scene.camera);
+    gpu.uniform1f(groundHalfTan, Math.tan(scene.camera.fov / 2));
+    gpu.uniform1f(groundAspect, vw / vh);
+    gpu.uniform4f(groundView, vx, vy, vw, vh);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
     gpu.enableVertexAttribArray(0);
     gpu.disableVertexAttribArray(1);
     gpu.vertexAttribPointer(0, 2, gpu.FLOAT, false, 0, 0);
+    const [groundRed, groundGreen, groundBlue] = parseColor(horizon.ground);
+    gpu.uniform3f(groundColor, groundRed / 255, groundGreen / 255, groundBlue / 255);
+    gpu.uniform1f(groundEye, horizon.eyeAboveFloor ?? 1);
     gpu.drawArrays(gpu.TRIANGLES, 0, 6);
+    const [skyRed, skyGreen, skyBlue] = parseColor(horizon.sky);
+    gpu.uniform3f(groundColor, skyRed / 255, skyGreen / 255, skyBlue / 255);
+    gpu.uniform1f(groundEye, horizon.eyeBelowCeiling ?? 1);
+    gpu.drawArrays(gpu.TRIANGLES, 6, 6);
 }
 
-function paintTriangles(gpu: WebGLRenderingContext, triangles: Triangle3D[]): void {
+function paintTriangles(gpu: WebGLRenderingContext, scene: Scene3D): void {
+    const triangles = scene.triangles;
     if (triangles.length === 0 || !triBuffer) {
         return;
     }
@@ -269,6 +352,7 @@ function paintTriangles(gpu: WebGLRenderingContext, triangles: Triangle3D[]): vo
     }
     gpu.useProgram(colorProgram);
     gpu.uniformMatrix4fv(colorViewProj, false, viewProj);
+    bindFog(gpu, colorFog, scene.fog, scene.camera);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, triBuffer);
     if (triangles !== uploadedTriangles) {
         let offset = 0;
@@ -301,13 +385,15 @@ function writeVertex(offset: number, point: Vec3, red: number, green: number, bl
     return offset + 6;
 }
 
-function paintBillboards(gpu: WebGLRenderingContext, camera: Camera3D, billboards: Billboard3D[]): void {
+function paintBillboards(gpu: WebGLRenderingContext, scene: Scene3D): void {
+    const billboards = scene.billboards ?? [];
     if (billboards.length === 0 || !spriteBuffer) {
         return;
     }
-    const basis = cameraBasis(camera);
+    const basis = cameraBasis(scene.camera);
     gpu.useProgram(spriteProgram);
     gpu.uniformMatrix4fv(spriteViewProj, false, viewProj);
+    bindFog(gpu, spriteFog, scene.fog, scene.camera);
     gpu.uniform1i(spriteSampler, 0);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, spriteBuffer);
     gpu.enableVertexAttribArray(0);
@@ -407,22 +493,55 @@ function ensureGl(): WebGLRenderingContext | null {
     return gl;
 }
 
+function bindFog(gpu: WebGLRenderingContext, uniforms: FogUniforms, fog: DistanceFog | undefined, camera: Camera3D): void {
+    gpu.uniform2f(uniforms.camera, camera.position.x, camera.position.z);
+    if (!fog || fog.end <= fog.start) {
+        gpu.uniform1f(uniforms.enabled, 0);
+        gpu.uniform1f(uniforms.start, 0);
+        gpu.uniform1f(uniforms.end, 1);
+        gpu.uniform3f(uniforms.color, 0, 0, 0);
+        return;
+    }
+    const [red, green, blue] = parseColor(fog.color);
+    gpu.uniform1f(uniforms.enabled, 1);
+    gpu.uniform1f(uniforms.start, fog.start);
+    gpu.uniform1f(uniforms.end, fog.end);
+    gpu.uniform3f(uniforms.color, red / 255, green / 255, blue / 255);
+}
+
+function fogLocations(gpu: WebGLRenderingContext, program: WebGLProgram): FogUniforms {
+    return {
+        color: gpu.getUniformLocation(program, "u_fogColor"),
+        start: gpu.getUniformLocation(program, "u_fogStart"),
+        end: gpu.getUniformLocation(program, "u_fogEnd"),
+        enabled: gpu.getUniformLocation(program, "u_fogEnabled"),
+        camera: gpu.getUniformLocation(program, "u_camera"),
+    };
+}
+
 function initPrograms(gpu: WebGLRenderingContext): void {
     textures.clear();
     uploadedTriangles = null;
     colorProgram = linkProgram(gpu, COLOR_VS, COLOR_FS, ["a_position", "a_color"]);
     colorViewProj = gpu.getUniformLocation(colorProgram, "u_viewProj");
+    colorFog = fogLocations(gpu, colorProgram);
     groundProgram = linkProgram(gpu, GROUND_VS, GROUND_FS, ["a_position"]);
     groundColor = gpu.getUniformLocation(groundProgram, "u_color");
+    groundFog = fogLocations(gpu, groundProgram);
+    groundEye = gpu.getUniformLocation(groundProgram, "u_eye");
+    groundHalfTan = gpu.getUniformLocation(groundProgram, "u_halfTan");
+    groundAspect = gpu.getUniformLocation(groundProgram, "u_aspect");
+    groundView = gpu.getUniformLocation(groundProgram, "u_view");
     spriteProgram = linkProgram(gpu, SPRITE_VS, SPRITE_FS, ["a_position", "a_uv"]);
     spriteViewProj = gpu.getUniformLocation(spriteProgram, "u_viewProj");
     spriteSampler = gpu.getUniformLocation(spriteProgram, "u_texture");
+    spriteFog = fogLocations(gpu, spriteProgram);
 
     triBuffer = gpu.createBuffer();
     groundBuffer = gpu.createBuffer();
     spriteBuffer = gpu.createBuffer();
     gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
-    gpu.bufferData(gpu.ARRAY_BUFFER, GROUND_VERTS, gpu.STATIC_DRAW);
+    gpu.bufferData(gpu.ARRAY_BUFFER, HORIZON_VERTS, gpu.STATIC_DRAW);
 }
 
 function linkProgram(gpu: WebGLRenderingContext, vertexSource: string, fragmentSource: string, attribs: string[]): WebGLProgram {

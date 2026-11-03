@@ -5,13 +5,15 @@ import type { GameState } from "../game/gameState";
 import { transitionToNextEvent } from "../gamedirector/gamedirector";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
+import { buyOffer } from "./itemShop";
 import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
+import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
 import { brokenVehicleRules, type VehicleRuleFailure } from "./vehicleRules";
-import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "./types/tiles";
+import { TILE_SIZE_PX, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
 const GRID_COLUMNS = 32;
@@ -185,6 +187,10 @@ function drawTileSprite(
     }
 }
 
+function isTileTab(tab: EditorTab): tab is TileType {
+    return tab === "WEAPON" || tab === "UTILITY" || tab === "BLOCK";
+}
+
 export function updateVehicleEditor(state: GameState): void {
     const mouse = getMousePosition();
     const wheel = consumeWheelDelta();
@@ -264,7 +270,7 @@ export function updateVehicleEditor(state: GameState): void {
     cameraY = viewCenterY - focusY * cellSize;
 
     const grid = vehicleGridGeometry();
-    const catalogTiles = selectedTab === "OVERCLOCK" ? [] : TILE_CATALOG[selectedTab];
+    const catalogTiles = isTileTab(selectedTab) ? TILE_CATALOG[selectedTab] : [];
     const layout = layoutSidebar(GAME_HEIGHT, selectedTab, catalogTiles);
     const hover = cellAt(grid, mouse.x, mouse.y);
     const leftDown = isMouseButtonDown(0);
@@ -286,7 +292,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // hold right button to erase tiles under the cursor
-    if (!panning && selectedTab !== "OVERCLOCK" && isMouseButtonDown(2) && hover) {
+    if (!panning && isTileTab(selectedTab) && isMouseButtonDown(2) && hover) {
         const index = state.playerData.vehicle.tiles.findIndex((placed) => {
             return hover.x >= placed.x
                 && hover.x < placed.x + placed.base.width
@@ -308,7 +314,7 @@ export function updateVehicleEditor(state: GameState): void {
                 continue;
             }
             selectedTab = tab.type;
-            if (selectedTab !== "OVERCLOCK") {
+            if (isTileTab(selectedTab)) {
                 const tiles = TILE_CATALOG[selectedTab];
                 const stillListed = selectedTile !== null && tiles.includes(selectedTile);
                 selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
@@ -317,7 +323,14 @@ export function updateVehicleEditor(state: GameState): void {
             break;
         }
 
-        if (selectedTab === "OVERCLOCK") {
+        if (selectedTab === "ITEMS") {
+            if (leftPressed && !overSidebar) {
+                const row = layoutItemShop(state.playerData).find((entry) => hits(entry.bounds, mouse.x, mouse.y));
+                if (row) {
+                    buyOffer(state.playerData, row.offer);
+                }
+            }
+        } else if (selectedTab === "OVERCLOCK") {
             const cards = layoutOverclockCards(selectedOverclockTile);
             if (leftPressed) {
                 const plus = cards.find((card) => hits(card.plus, mouse.x, mouse.y));
@@ -452,7 +465,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // placement preview sits on the grid cells the cursor-centered tile would occupy
-    if (selectedTab !== "OVERCLOCK" && hover && selectedTile) {
+    if (isTileTab(selectedTab) && hover && selectedTile) {
         const origin = placementOrigin(grid, mouse.x, mouse.y, selectedTile);
         let previewColor: string | undefined;
         for (const placed of state.playerData.vehicle.tiles) {
@@ -515,6 +528,9 @@ export function updateVehicleEditor(state: GameState): void {
 
     setDrawClip(null);
     drawBuildingSidebar(layout, selectedTile);
+    if (selectedTab === "ITEMS") {
+        drawItemShop(state.playerData);
+    }
     if (selectedTab === "OVERCLOCK") {
         drawOverclockPanel(selectedOverclockTile, state.playerData.overclockModules);
     }

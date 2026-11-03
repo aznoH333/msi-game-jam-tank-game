@@ -8,13 +8,14 @@ import { TILE_SIZE_PX, type BaseTile, type TileType } from "../building/types/ti
 export const SIDEBAR_WIDTH = ABILITY_BAR_WIDTH;
 export const SIDEBAR_CONTENT_TOP = 68;
 
-export type EditorTab = TileType | "OVERCLOCK";
+export type EditorTab = TileType | "OVERCLOCK" | "ITEMS";
 
 const TABS: { type: EditorTab; label: string }[] = [
     { type: "WEAPON", label: "weapons" },
     { type: "UTILITY", label: "utility" },
     { type: "BLOCK", label: "blocks" },
     { type: "OVERCLOCK", label: "overclocks" },
+    { type: "ITEMS", label: "items" },
 ];
 
 export interface Bounds {
@@ -111,15 +112,17 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             text: tab.label,
             x: tab.bounds.x + tab.bounds.width / 2,
             y: tab.bounds.y + tab.bounds.height / 2,
-            font: "13px sans-serif",
+            font: "11px sans-serif",
             color: "#eceae4",
             align: "center",
             baseline: "middle",
         });
     }
 
-    const overclockMode = layout.tabs.some((tab) => tab.type === "OVERCLOCK" && tab.active);
-    if (layout.entries.length === 0 && !overclockMode) {
+    const listingTiles = layout.tabs.some((tab) => {
+        return tab.active && (tab.type === "WEAPON" || tab.type === "UTILITY" || tab.type === "BLOCK");
+    });
+    if (layout.entries.length === 0 && listingTiles) {
         drawText({
             text: "No parts",
             x: 24,
