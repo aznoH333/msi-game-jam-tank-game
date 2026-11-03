@@ -2,8 +2,9 @@ import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
 import { drawText, measureText } from "../drawing/text";
+import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
-import { transitionToNextEvent } from "../gamedirector/gamedirector";
+import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { isKeyDown, isMouseButtonDown } from "../input/input";
 import { enemyOnRay, rollDamage, spawnEnemies, stepEnemy, type EnemyActor } from "./enemies";
 import { cellAt, generateMaze, isWalkable, type Maze, type MazePickup } from "./maze";
@@ -36,6 +37,7 @@ const WALL_FACE = {
 
 interface Exploration {
     eventIndex: number;
+    attempt: number;
     maze: Maze;
     walls: Triangle3D[];
     pickups: MazePickup[];
@@ -57,12 +59,13 @@ let leaveWasDown = false;
 export function updateExplore(): void {
     const state = getGameState();
     const now = performance.now();
-    if (!exploration || exploration.eventIndex !== state.gameDirector.eventIndex) {
+    if (!exploration || exploration.eventIndex !== state.gameDirector.eventIndex || exploration.attempt !== directorAttempt()) {
         const maze = generateMaze(Math.random, ammoPackSources(state.playerData.weapons));
         const walls = mazeTriangles(maze);
         const pickups = maze.pickups.map((pickup) => ({ ...pickup }));
         exploration = {
             eventIndex: state.gameDirector.eventIndex,
+            attempt: directorAttempt(),
             maze,
             walls,
             pickups,
@@ -116,7 +119,7 @@ export function updateExplore(): void {
     drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
     drawCombatHud(run, player.personHealth);
     if (player.personHealth <= 0) {
-        transitionToNextEvent();
+        openGameOver();
         return;
     }
 

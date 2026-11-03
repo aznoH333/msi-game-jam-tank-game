@@ -1,4 +1,5 @@
 import { getGameState, switchGameState } from "../game/gameState";
+import { markShopCheckpoint, rewindToCheckpoint } from "./checkpoint";
 
 /**
  * A stage in this context refers to the event number that has taken place.
@@ -13,6 +14,8 @@ const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "EXPLORAT
 
 export interface GameDirector {
     eventIndex: number;
+    /** When the player dies they are restored to this event */
+    lastCheckPoint: number;
     currentEventType: EventType;
 }
 
@@ -21,6 +24,7 @@ export interface GameDirector {
 export function initGameDirector(): GameDirector {
     return {
         eventIndex: 0,
+        lastCheckPoint: 0,
         currentEventType: "SHOP" 
     }
 }
@@ -28,12 +32,28 @@ export function initGameDirector(): GameDirector {
 
 
 
-/** The player lost a fight. Put them back at the shop that started this loop. */
-export function loseCombat(): void {
-    const director = getGameState().gameDirector;
-    director.eventIndex = Math.floor(director.eventIndex / EVENT_LOOP.length) * EVENT_LOOP.length;
-    director.currentEventType = "SHOP";
-    switchGameState("BUILDING_SCREEN");
+let attempt = 0;
+
+/** Changes when a run starts or the player is sent back, so encounters rebuild. */
+export function directorAttempt(): number {
+    return attempt;
+}
+
+export function beginAttempt(): void {
+    attempt += 1;
+}
+
+/** The shop the player is standing in becomes the place death sends them back to. */
+export function rememberShopCheckpoint(): void {
+    markShopCheckpoint(getGameState().gameDirector);
+}
+
+/** Death in a fight or a maze. Full heal, then the last shop. */
+export function restoreCheckpoint(): void {
+    beginAttempt();
+    const state = getGameState();
+    rewindToCheckpoint(state.gameDirector, state.playerData, getEventTypeForIndex);
+    switchGameState(screenForEvent(state.gameDirector.currentEventType));
 }
 
 export function transitionToNextEvent() {

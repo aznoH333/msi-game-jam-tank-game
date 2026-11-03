@@ -4,7 +4,7 @@ import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
 import { drawText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
-import { chooseExploration, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
+import { chooseExploration, directorAttempt, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
 import { drawCombatVehicle } from "./combatView";
@@ -29,6 +29,7 @@ const EVENT_SPRITE = "world/events/debug_event";
 const BUILDING_COLORS = ["#8d939c", "#6e757f", "#a7adb6", "#5c636c"];
 
 let travelEvent = -1;
+let travelAttempt = -1;
 let travelTime = 0;
 let lastUpdateMs = 0;
 let travelLeftWasDown = false;
@@ -37,8 +38,9 @@ let travelLeftWasDown = false;
 export function updateTravel(): void {
     const state = getGameState();
     const now = performance.now();
-    if (travelEvent !== state.gameDirector.eventIndex) {
+    if (travelEvent !== state.gameDirector.eventIndex || travelAttempt !== directorAttempt()) {
         travelEvent = state.gameDirector.eventIndex;
+        travelAttempt = directorAttempt();
         travelTime = 0;
         lastUpdateMs = now;
         travelLeftWasDown = isMouseButtonDown(0);

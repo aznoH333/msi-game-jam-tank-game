@@ -1,8 +1,8 @@
 import { WeaponCatalog, type WeaponName } from "../exploration/constants/weaponCatalog";
-import type { PlayerData } from "../game/playerData";
+import { PERSON_HEALTH_MAX, type PlayerData } from "../game/playerData";
 
 export const MEDPACK_PRICE = 500;
-export const MEDPACK_HEALTH = 100;
+export const MEDPACK_HEALTH = PERSON_HEALTH_MAX;
 
 export type ShopOffer =
     | { kind: "medpack"; price: number; title: string }

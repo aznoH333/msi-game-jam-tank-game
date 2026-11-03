@@ -3,9 +3,10 @@ import { getOverclockedTurretStats } from "../building/vehicleUtils";
 import { drawCircle, drawRect, GAME_HEIGHT, getDrawClip, setDrawClip } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
+import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
 import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
-import { loseCombat, transitionToNextEvent } from "../gamedirector/gamedirector";
+import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawHealthBar, drawViewEnergy, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
 import {
@@ -39,6 +40,7 @@ const REPAIR_RANGE_STROKE = "rgba(170, 235, 190, 0.95)";
 const WEAPON_KEY_COUNT = 9;
 
 let encounterEvent = -1;
+let combatAttempt = -1;
 let battle: Battle | null = null;
 let moneyAwarded = false;
 let leftWasDown = false;
@@ -182,8 +184,9 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
 /** Player and enemy share this update. Only the supplied input can start a shot. */
 export function updateCombat(): void {
     const state = getGameState();
-    if (!battle || encounterEvent !== state.gameDirector.eventIndex) {
+    if (!battle || encounterEvent !== state.gameDirector.eventIndex || combatAttempt !== directorAttempt()) {
         encounterEvent = state.gameDirector.eventIndex;
+        combatAttempt = directorAttempt();
         const picked = pickEnemyVehicle(encounterEvent);
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
@@ -371,6 +374,10 @@ export function updateCombat(): void {
     drawHealthBar(playerView.x + 24, playerView.y + 52, 240, playerHealth ?? 0);
     drawHealthBar(enemyView.x + 24, enemyView.y + 52, 240, enemyHealth ?? 0);
 
+    if (fight.result === "defeat") {
+        openGameOver();
+        return;
+    }
     if (!fight.result) {
         return;
     }
@@ -384,11 +391,11 @@ export function updateCombat(): void {
         color: "#1b1f2a",
     });
     drawText({
-        text: fight.result === "victory" ? "Victory" : "Defeat",
+        text: "Victory",
         x: panel.x + panel.width / 2,
         y: panel.y + 58,
         font: "42px sans-serif",
-        color: fight.result === "victory" ? "#8ee0a8" : "#f0a198",
+        color: "#8ee0a8",
         align: "center",
         baseline: "middle",
     });
@@ -422,11 +429,7 @@ export function updateCombat(): void {
         && mouse.x < button.x + button.width
         && mouse.y < button.y + button.height
     ) {
-        if (fight.result === "victory") {
-            transitionToNextEvent();
-        } else {
-            loseCombat();
-        }
+        transitionToNextEvent();
     }
 }
 

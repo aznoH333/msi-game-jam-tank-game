@@ -1,6 +1,8 @@
 import { BaseVehicle } from "../building/types/vehicle";
 import { WeaponName } from "../exploration/constants/weaponCatalog";
 
+export const PERSON_HEALTH_MAX = 100;
+
 export interface PlayerData {
     vehicle: BaseVehicle;
     money: number;
@@ -23,6 +25,6 @@ export function initPlayerData(): PlayerData {
             "fists": 0, 
             "pistol": 50,
         },
-        personHealth: 100,
+        personHealth: PERSON_HEALTH_MAX,
     }
 }

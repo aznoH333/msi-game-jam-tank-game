@@ -1,12 +1,13 @@
-import { GameDirector, initGameDirector } from "../gamedirector/gamedirector";
+import { beginAttempt, GameDirector, initGameDirector } from "../gamedirector/gamedirector";
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
 import { explorationScreenUpdate } from "./explorationScreen";
+import { gameOverUpdate } from "./gameOver";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
 
 
-export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN";
+export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
 
 export interface GameState {
     currentScreen: GameScreen;
@@ -20,7 +21,7 @@ export interface GameState {
 export function initGame(): GameState {
     // initializes new game
     return {
-        currentScreen: "BUILDING_SCREEN",
+        currentScreen: "MAIN_MENU",
         playerData: initPlayerData(),
         gameDirector: initGameDirector(),
     };
@@ -58,7 +59,20 @@ export function updateGame(state: GameState) {
         case "EXPLORATION_SCREEN":
             explorationScreenUpdate();
             break;
+
+        case "GAME_OVER_SCREEN":
+            gameOverUpdate();
+            break;
     }
+}
+
+/** Replace the run and open the first shop. */
+export function startNewGame(): void {
+    beginAttempt();
+    const state = getGameState();
+    state.playerData = initPlayerData();
+    state.gameDirector = initGameDirector();
+    state.currentScreen = "BUILDING_SCREEN";
 }
 
 export function switchGameState(newState: GameScreen) {

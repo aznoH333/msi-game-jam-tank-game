@@ -38,6 +38,7 @@ let selectedTab: EditorTab = "BLOCK";
 let selectedTile: BaseTile | null = TILE_CATALOG.BLOCK[0] ?? null;
 let selectedOverclockTile: PlacedTile | null = null;
 let editorLeftWasDown = false;
+let editorPrimed = false;
 let zoom = 1;
 let cameraX = 0;
 let cameraY = 0;
@@ -274,6 +275,10 @@ export function updateVehicleEditor(state: GameState): void {
     const layout = layoutSidebar(GAME_HEIGHT, selectedTab, catalogTiles);
     const hover = cellAt(grid, mouse.x, mouse.y);
     const leftDown = isMouseButtonDown(0);
+    if (!editorPrimed) {
+        editorLeftWasDown = leftDown;
+        editorPrimed = true;
+    }
     const leftPressed = leftDown && !editorLeftWasDown;
     const goButton = goButtonBounds(paneWidth);
     const copyButton = copyButtonBounds(paneWidth);
