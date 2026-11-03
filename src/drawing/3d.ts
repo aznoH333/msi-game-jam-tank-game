@@ -1,4 +1,4 @@
-import { getCanvasContext, type DrawClip } from "./canvas";
+import { GAME_HEIGHT, GAME_WIDTH, getCanvasContext, mirrorGameCanvas, type DrawClip } from "./canvas";
 import { getSpriteImage } from "./sprites";
 
 /** Y is up. Yaw 0 looks down +Z, and positive yaw turns left. */
@@ -37,22 +37,109 @@ export interface Scene3D {
     triangles: Triangle3D[];
     background: string;
     billboards?: Billboard3D[];
-}
-
-interface CameraPoint {
-    x: number;
-    y: number;
-    z: number;
+    /** Top half of the viewport is sky, bottom half is ground, both behind the triangles. */
+    horizon?: { sky: string; ground: string };
 }
 
 const NEAR_PLANE = 0.08;
+const FAR_PLANE = 500;
 const queuedScenes: Scene3D[] = [];
 
-let depthCanvas: HTMLCanvasElement | null = null;
-let depthContext: CanvasRenderingContext2D | null = null;
-let depthPixels: ImageData | null = null;
-let depthValues: Float32Array | null = null;
-const billboardPixels = new Map<string, ImageData>();
+const GL_OPTIONS: WebGLContextAttributes = {
+    alpha: false,
+    antialias: true,
+    depth: true,
+    stencil: false,
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: false,
+};
+
+let glCanvas: HTMLCanvasElement | null = null;
+let gl: WebGLRenderingContext | null = null;
+let programsReady = false;
+
+let colorProgram: WebGLProgram | null = null;
+let colorViewProj: WebGLUniformLocation | null = null;
+let groundProgram: WebGLProgram | null = null;
+let groundColor: WebGLUniformLocation | null = null;
+let spriteProgram: WebGLProgram | null = null;
+let spriteViewProj: WebGLUniformLocation | null = null;
+let spriteSampler: WebGLUniformLocation | null = null;
+
+let triBuffer: WebGLBuffer | null = null;
+let groundBuffer: WebGLBuffer | null = null;
+let spriteBuffer: WebGLBuffer | null = null;
+let triData = new Float32Array(4096);
+let uploadedTriangles: Triangle3D[] | null = null;
+const spriteData = new Float32Array(30);
+const viewProj = new Float32Array(16);
+const textures = new Map<string, WebGLTexture>();
+
+const COLOR_VS = `
+attribute vec3 a_position;
+attribute vec3 a_color;
+uniform mat4 u_viewProj;
+varying vec3 v_color;
+void main() {
+    gl_Position = u_viewProj * vec4(a_position, 1.0);
+    v_color = a_color;
+}
+`;
+
+const COLOR_FS = `
+precision mediump float;
+varying vec3 v_color;
+void main() {
+    gl_FragColor = vec4(v_color, 1.0);
+}
+`;
+
+const GROUND_VS = `
+attribute vec2 a_position;
+void main() {
+    gl_Position = vec4(a_position, 1.0, 1.0);
+}
+`;
+
+const GROUND_FS = `
+precision mediump float;
+uniform vec3 u_color;
+void main() {
+    gl_FragColor = vec4(u_color, 1.0);
+}
+`;
+
+const SPRITE_VS = `
+attribute vec3 a_position;
+attribute vec2 a_uv;
+uniform mat4 u_viewProj;
+varying vec2 v_uv;
+void main() {
+    gl_Position = u_viewProj * vec4(a_position, 1.0);
+    v_uv = a_uv;
+}
+`;
+
+const SPRITE_FS = `
+precision mediump float;
+uniform sampler2D u_texture;
+varying vec2 v_uv;
+void main() {
+    vec4 color = texture2D(u_texture, v_uv);
+    if (color.a <= 0.5) discard;
+    gl_FragColor = vec4(color.rgb, 1.0);
+}
+`;
+
+/** Bottom half of the current viewport, in clip space. */
+const GROUND_VERTS = new Float32Array([
+    -1, -1,
+    1, -1,
+    1, 0,
+    -1, -1,
+    1, 0,
+    -1, 0,
+]);
 
 /** Queue a 3D scene. `render3D` paints it before the 2D layers. */
 export function drawScene3D(scene: Scene3D): void {
@@ -64,10 +151,20 @@ export function render3D(): void {
     if (scenes.length === 0) {
         return;
     }
+    const gpu = ensureGl();
+    if (!gpu || !glCanvas) {
+        return;
+    }
+    mirrorGameCanvas(glCanvas);
+    gpu.disable(gpu.CULL_FACE);
+    gpu.disable(gpu.BLEND);
+    gpu.depthFunc(gpu.LEQUAL);
+    gpu.enable(gpu.SCISSOR_TEST);
     const context = getCanvasContext();
     for (const scene of scenes) {
-        paintScene(context, scene);
+        paintScene(gpu, context, scene);
     }
+    gpu.disable(gpu.SCISSOR_TEST);
 }
 
 /** Horizontal quad on the XZ plane, centered on `center`. */
@@ -113,327 +210,289 @@ export function boxTriangles(center: Vec3, size: Vec3, color: string): Triangle3
     return triangles;
 }
 
-interface ScreenVertex {
-    x: number;
-    y: number;
-    invZ: number;
-}
-
-function paintScene(context: CanvasRenderingContext2D, scene: Scene3D): void {
+function paintScene(gpu: WebGLRenderingContext, context: CanvasRenderingContext2D, scene: Scene3D): void {
     const view = scene.viewport;
-    const width = Math.ceil(view.width);
-    const height = Math.ceil(view.height);
-    if (width <= 0 || height <= 0) {
+    const bitmapWidth = glCanvas?.width ?? 0;
+    const bitmapHeight = glCanvas?.height ?? 0;
+    if (view.width <= 0 || view.height <= 0 || bitmapWidth <= 0 || bitmapHeight <= 0) {
         return;
     }
+    const vx = Math.round(view.x * bitmapWidth / GAME_WIDTH);
+    const vw = Math.max(1, Math.round(view.width * bitmapWidth / GAME_WIDTH));
+    const vh = Math.max(1, Math.round(view.height * bitmapHeight / GAME_HEIGHT));
+    const vy = bitmapHeight - Math.round((view.y + view.height) * bitmapHeight / GAME_HEIGHT);
+    gpu.viewport(vx, vy, vw, vh);
+    gpu.scissor(vx, vy, vw, vh);
+    gpu.enable(gpu.DEPTH_TEST);
+    gpu.depthMask(true);
 
-    const buffer = ensureDepthBuffer(width, height);
-    const pixels = buffer.pixels.data;
-    const depth = buffer.depth;
-    const background = parseColor(scene.background);
-    for (let index = 0, pixel = 0; index < depth.length; index++, pixel += 4) {
-        pixels[pixel] = background[0];
-        pixels[pixel + 1] = background[1];
-        pixels[pixel + 2] = background[2];
-        pixels[pixel + 3] = 255;
-        depth[index] = 0;
+    const clear = parseColor(scene.horizon?.sky ?? scene.background);
+    gpu.clearColor(clear[0] / 255, clear[1] / 255, clear[2] / 255, 1);
+    gpu.clear(gpu.COLOR_BUFFER_BIT | gpu.DEPTH_BUFFER_BIT);
+    if (scene.horizon) {
+        paintGround(gpu, scene.horizon.ground);
+        gpu.enable(gpu.DEPTH_TEST);
+        gpu.depthMask(true);
     }
 
-    const basis = cameraBasis(scene.camera);
-    for (const triangle of scene.triangles) {
-        const cameraPoints = [triangle.a, triangle.b, triangle.c].map((vertex) => toCamera(vertex, scene.camera.position, basis));
-        const clipped = clipNear(cameraPoints, NEAR_PLANE);
-        if (clipped.length < 3) {
+    setViewProjection(scene.camera, vw / vh);
+    paintTriangles(gpu, scene.triangles);
+    paintBillboards(gpu, scene.camera, scene.billboards ?? []);
+    // The 2D canvas sits on top. Leave this rectangle transparent so the WebGL frame shows through.
+    context.clearRect(view.x, view.y, view.width, view.height);
+}
+
+function paintGround(gpu: WebGLRenderingContext, color: string): void {
+    const [red, green, blue] = parseColor(color);
+    gpu.disable(gpu.DEPTH_TEST);
+    gpu.depthMask(false);
+    gpu.useProgram(groundProgram);
+    gpu.uniform3f(groundColor, red / 255, green / 255, blue / 255);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
+    gpu.enableVertexAttribArray(0);
+    gpu.disableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 2, gpu.FLOAT, false, 0, 0);
+    gpu.drawArrays(gpu.TRIANGLES, 0, 6);
+}
+
+function paintTriangles(gpu: WebGLRenderingContext, triangles: Triangle3D[]): void {
+    if (triangles.length === 0 || !triBuffer) {
+        return;
+    }
+    const floats = triangles.length * 18;
+    if (triData.length < floats) {
+        let size = triData.length;
+        while (size < floats) {
+            size *= 2;
+        }
+        triData = new Float32Array(size);
+    }
+    gpu.useProgram(colorProgram);
+    gpu.uniformMatrix4fv(colorViewProj, false, viewProj);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, triBuffer);
+    if (triangles !== uploadedTriangles) {
+        let offset = 0;
+        for (const triangle of triangles) {
+            const [red, green, blue] = parseColor(triangle.color);
+            const r = red / 255;
+            const g = green / 255;
+            const b = blue / 255;
+            offset = writeVertex(offset, triangle.a, r, g, b);
+            offset = writeVertex(offset, triangle.b, r, g, b);
+            offset = writeVertex(offset, triangle.c, r, g, b);
+        }
+        gpu.bufferData(gpu.ARRAY_BUFFER, triData.subarray(0, offset), gpu.DYNAMIC_DRAW);
+        uploadedTriangles = triangles;
+    }
+    gpu.enableVertexAttribArray(0);
+    gpu.enableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 3, gpu.FLOAT, false, 24, 0);
+    gpu.vertexAttribPointer(1, 3, gpu.FLOAT, false, 24, 12);
+    gpu.drawArrays(gpu.TRIANGLES, 0, triangles.length * 3);
+}
+
+function writeVertex(offset: number, point: Vec3, red: number, green: number, blue: number): number {
+    triData[offset] = point.x;
+    triData[offset + 1] = point.y;
+    triData[offset + 2] = point.z;
+    triData[offset + 3] = red;
+    triData[offset + 4] = green;
+    triData[offset + 5] = blue;
+    return offset + 6;
+}
+
+function paintBillboards(gpu: WebGLRenderingContext, camera: Camera3D, billboards: Billboard3D[]): void {
+    if (billboards.length === 0 || !spriteBuffer) {
+        return;
+    }
+    const basis = cameraBasis(camera);
+    gpu.useProgram(spriteProgram);
+    gpu.uniformMatrix4fv(spriteViewProj, false, viewProj);
+    gpu.uniform1i(spriteSampler, 0);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, spriteBuffer);
+    gpu.enableVertexAttribArray(0);
+    gpu.enableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 3, gpu.FLOAT, false, 20, 0);
+    gpu.vertexAttribPointer(1, 2, gpu.FLOAT, false, 20, 12);
+    for (const billboard of billboards) {
+        const texture = spriteTexture(gpu, billboard.sprite);
+        if (!texture) {
             continue;
         }
-        const projected = clipped.map((point) => projectLocal(point, scene.camera.fov, width, height));
-        const [red, green, blue] = parseColor(triangle.color);
-        for (let index = 1; index < projected.length - 1; index++) {
-            rasterizeTriangle(pixels, depth, width, height, projected[0], projected[index], projected[index + 1], red, green, blue);
-        }
-    }
-
-    for (const billboard of scene.billboards ?? []) {
-        paintBillboard(pixels, depth, width, height, scene.camera, basis, billboard);
-    }
-
-    buffer.context.putImageData(buffer.pixels, 0, 0);
-    const smoothing = context.imageSmoothingEnabled;
-    context.imageSmoothingEnabled = true;
-    context.drawImage(buffer.canvas, view.x, view.y, view.width, view.height);
-    context.imageSmoothingEnabled = smoothing;
-}
-
-function ensureDepthBuffer(width: number, height: number): {
-    canvas: HTMLCanvasElement;
-    context: CanvasRenderingContext2D;
-    pixels: ImageData;
-    depth: Float32Array;
-} {
-    if (depthCanvas && depthContext && depthPixels && depthValues && depthCanvas.width === width && depthCanvas.height === height) {
-        return { canvas: depthCanvas, context: depthContext, pixels: depthPixels, depth: depthValues };
-    }
-    depthCanvas = document.createElement("canvas");
-    depthCanvas.width = width;
-    depthCanvas.height = height;
-    const context = depthCanvas.getContext("2d");
-    if (!context) {
-        throw new Error("2D canvas is unavailable");
-    }
-    depthContext = context;
-    depthPixels = context.createImageData(width, height);
-    depthValues = new Float32Array(width * height);
-    return { canvas: depthCanvas, context, pixels: depthPixels, depth: depthValues };
-}
-
-/** Fill only covered pixels, keeping the nearer surface. A larger inverse-z is closer. */
-function rasterizeTriangle(
-    pixels: Uint8ClampedArray,
-    depth: Float32Array,
-    width: number,
-    height: number,
-    a: ScreenVertex,
-    b: ScreenVertex,
-    c: ScreenVertex,
-    red: number,
-    green: number,
-    blue: number,
-): void {
-    const verts = [a, b, c].sort((first, second) => first.y - second.y);
-    const top = verts[0];
-    const middle = verts[1];
-    const bottom = verts[2];
-    if (bottom.y - top.y < 1e-4) {
-        return;
-    }
-
-    const yStart = Math.max(0, Math.ceil(top.y - 0.5));
-    const yEnd = Math.min(height - 1, Math.floor(bottom.y - 0.5));
-    for (let y = yStart; y <= yEnd; y++) {
-        const py = y + 0.5;
-        const longT = (py - top.y) / (bottom.y - top.y);
-        let xLong = top.x + (bottom.x - top.x) * longT;
-        let zLong = top.invZ + (bottom.invZ - top.invZ) * longT;
-        let xShort = xLong;
-        let zShort = zLong;
-        if (py < middle.y && middle.y - top.y > 1e-4) {
-            const shortT = (py - top.y) / (middle.y - top.y);
-            xShort = top.x + (middle.x - top.x) * shortT;
-            zShort = top.invZ + (middle.invZ - top.invZ) * shortT;
-        } else if (bottom.y - middle.y > 1e-4) {
-            const shortT = (py - middle.y) / (bottom.y - middle.y);
-            xShort = middle.x + (bottom.x - middle.x) * shortT;
-            zShort = middle.invZ + (bottom.invZ - middle.invZ) * shortT;
-        }
-
-        if (xLong > xShort) {
-            const swapX = xLong;
-            xLong = xShort;
-            xShort = swapX;
-            const swapZ = zLong;
-            zLong = zShort;
-            zShort = swapZ;
-        }
-
-        const xStart = Math.max(0, Math.ceil(xLong - 0.5));
-        const xEnd = Math.min(width - 1, Math.floor(xShort - 0.5));
-        if (xStart > xEnd) {
-            continue;
-        }
-        const span = xShort - xLong;
-        const zStep = span === 0 ? 0 : (zShort - zLong) / span;
-        let invZ = zLong + zStep * (xStart + 0.5 - xLong);
-        let index = y * width + xStart;
-        for (let x = xStart; x <= xEnd; x++, index++) {
-            if (invZ > depth[index]) {
-                depth[index] = invZ;
-                const pixel = index * 4;
-                pixels[pixel] = red;
-                pixels[pixel + 1] = green;
-                pixels[pixel + 2] = blue;
-                pixels[pixel + 3] = 255;
-            }
-            invZ += zStep;
-        }
+        writeBillboard(billboard, basis);
+        gpu.bufferData(gpu.ARRAY_BUFFER, spriteData, gpu.DYNAMIC_DRAW);
+        gpu.activeTexture(gpu.TEXTURE0);
+        gpu.bindTexture(gpu.TEXTURE_2D, texture);
+        gpu.drawArrays(gpu.TRIANGLES, 0, 6);
     }
 }
 
-interface TexturedVertex {
-    x: number;
-    y: number;
-    invZ: number;
-    uOverZ: number;
-    vOverZ: number;
-}
-
-/** Draw the sprite on a quad perpendicular to the camera. */
-function paintBillboard(
-    pixels: Uint8ClampedArray,
-    depth: Float32Array,
-    width: number,
-    height: number,
-    camera: Camera3D,
-    basis: { right: Vec3; up: Vec3; forward: Vec3 },
-    billboard: Billboard3D,
-): void {
-    const image = billboardImage(billboard.sprite);
-    if (!image) {
-        return;
-    }
+function writeBillboard(billboard: Billboard3D, basis: { right: Vec3; up: Vec3 }): void {
     const hx = billboard.width / 2;
     const hy = billboard.height / 2;
+    const origin = billboard.position;
     const right = basis.right;
     const up = basis.up;
-    const origin = billboard.position;
-    const corner = (xSign: number, ySign: number, u: number, v: number): TexturedVertex | null => {
-        const world = {
-            x: origin.x + right.x * hx * xSign + up.x * hy * ySign,
-            y: origin.y + right.y * hx * xSign + up.y * hy * ySign,
-            z: origin.z + right.z * hx * xSign + up.z * hy * ySign,
-        };
-        const cameraPoint = toCamera(world, camera.position, basis);
-        if (cameraPoint.z < NEAR_PLANE) {
-            return null;
-        }
-        const projected = projectLocal(cameraPoint, camera.fov, width, height);
-        return {
-            x: projected.x,
-            y: projected.y,
-            invZ: projected.invZ,
-            uOverZ: u * projected.invZ,
-            vOverZ: v * projected.invZ,
-        };
-    };
-    const bottomLeft = corner(-1, -1, 0, 1);
-    const bottomRight = corner(1, -1, 1, 1);
-    const topRight = corner(1, 1, 1, 0);
-    const topLeft = corner(-1, 1, 0, 0);
-    if (!bottomLeft || !bottomRight || !topRight || !topLeft) {
-        return;
+    const corners: [number, number, number, number][] = [
+        [-1, -1, 0, 1],
+        [1, -1, 1, 1],
+        [1, 1, 1, 0],
+        [-1, -1, 0, 1],
+        [1, 1, 1, 0],
+        [-1, 1, 0, 0],
+    ];
+    let offset = 0;
+    for (const [xSign, ySign, u, v] of corners) {
+        spriteData[offset++] = origin.x + right.x * hx * xSign + up.x * hy * ySign;
+        spriteData[offset++] = origin.y + right.y * hx * xSign + up.y * hy * ySign;
+        spriteData[offset++] = origin.z + right.z * hx * xSign + up.z * hy * ySign;
+        spriteData[offset++] = u;
+        spriteData[offset++] = v;
     }
-    rasterizeTexturedTriangle(pixels, depth, width, height, bottomLeft, bottomRight, topRight, image);
-    rasterizeTexturedTriangle(pixels, depth, width, height, bottomLeft, topRight, topLeft, image);
 }
 
-function billboardImage(sprite: string): ImageData | null {
-    const cached = billboardPixels.get(sprite);
+function spriteTexture(gpu: WebGLRenderingContext, sprite: string): WebGLTexture | null {
+    const cached = textures.get(sprite);
     if (cached) {
         return cached;
     }
     const image = getSpriteImage(sprite);
-    if (!image || image.width === 0 || image.height === 0) {
+    if (!image || image.naturalWidth === 0 || image.naturalHeight === 0) {
         return null;
     }
-    const canvas = document.createElement("canvas");
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext("2d");
-    if (!context) {
+    const texture = gpu.createTexture();
+    if (!texture) {
         return null;
     }
-    context.drawImage(image, 0, 0);
-    const data = context.getImageData(0, 0, image.width, image.height);
-    billboardPixels.set(sprite, data);
-    return data;
+    gpu.bindTexture(gpu.TEXTURE_2D, texture);
+    gpu.pixelStorei(gpu.UNPACK_FLIP_Y_WEBGL, false);
+    gpu.pixelStorei(gpu.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gpu.texImage2D(gpu.TEXTURE_2D, 0, gpu.RGBA, gpu.RGBA, gpu.UNSIGNED_BYTE, image);
+    gpu.texParameteri(gpu.TEXTURE_2D, gpu.TEXTURE_WRAP_S, gpu.CLAMP_TO_EDGE);
+    gpu.texParameteri(gpu.TEXTURE_2D, gpu.TEXTURE_WRAP_T, gpu.CLAMP_TO_EDGE);
+    gpu.texParameteri(gpu.TEXTURE_2D, gpu.TEXTURE_MIN_FILTER, gpu.NEAREST);
+    gpu.texParameteri(gpu.TEXTURE_2D, gpu.TEXTURE_MAG_FILTER, gpu.NEAREST);
+    textures.set(sprite, texture);
+    return texture;
 }
 
-function rasterizeTexturedTriangle(
-    pixels: Uint8ClampedArray,
-    depth: Float32Array,
-    width: number,
-    height: number,
-    a: TexturedVertex,
-    b: TexturedVertex,
-    c: TexturedVertex,
-    image: ImageData,
-): void {
-    const verts = [a, b, c].sort((first, second) => first.y - second.y);
-    const top = verts[0];
-    const middle = verts[1];
-    const bottom = verts[2];
-    if (bottom.y - top.y < 1e-4) {
-        return;
+function ensureGl(): WebGLRenderingContext | null {
+    if (!glCanvas) {
+        glCanvas = document.createElement("canvas");
+        glCanvas.id = "world";
+        glCanvas.style.pointerEvents = "none";
+        const game = document.getElementById("game");
+        game?.parentElement?.insertBefore(glCanvas, game);
+        glCanvas.addEventListener("webglcontextlost", (event) => {
+            event.preventDefault();
+            programsReady = false;
+        });
+        glCanvas.addEventListener("webglcontextrestored", () => {
+            programsReady = false;
+        });
     }
-
-    const yStart = Math.max(0, Math.ceil(top.y - 0.5));
-    const yEnd = Math.min(height - 1, Math.floor(bottom.y - 0.5));
-    for (let y = yStart; y <= yEnd; y++) {
-        const py = y + 0.5;
-        const longT = (py - top.y) / (bottom.y - top.y);
-        let xLong = top.x + (bottom.x - top.x) * longT;
-        let zLong = top.invZ + (bottom.invZ - top.invZ) * longT;
-        let uLong = top.uOverZ + (bottom.uOverZ - top.uOverZ) * longT;
-        let vLong = top.vOverZ + (bottom.vOverZ - top.vOverZ) * longT;
-        let xShort = xLong;
-        let zShort = zLong;
-        let uShort = uLong;
-        let vShort = vLong;
-        if (py < middle.y && middle.y - top.y > 1e-4) {
-            const shortT = (py - top.y) / (middle.y - top.y);
-            xShort = top.x + (middle.x - top.x) * shortT;
-            zShort = top.invZ + (middle.invZ - top.invZ) * shortT;
-            uShort = top.uOverZ + (middle.uOverZ - top.uOverZ) * shortT;
-            vShort = top.vOverZ + (middle.vOverZ - top.vOverZ) * shortT;
-        } else if (bottom.y - middle.y > 1e-4) {
-            const shortT = (py - middle.y) / (bottom.y - middle.y);
-            xShort = middle.x + (bottom.x - middle.x) * shortT;
-            zShort = middle.invZ + (bottom.invZ - middle.invZ) * shortT;
-            uShort = middle.uOverZ + (bottom.uOverZ - middle.uOverZ) * shortT;
-            vShort = middle.vOverZ + (bottom.vOverZ - middle.vOverZ) * shortT;
-        }
-
-        if (xLong > xShort) {
-            const swapX = xLong;
-            xLong = xShort;
-            xShort = swapX;
-            const swapZ = zLong;
-            zLong = zShort;
-            zShort = swapZ;
-            const swapU = uLong;
-            uLong = uShort;
-            uShort = swapU;
-            const swapV = vLong;
-            vLong = vShort;
-            vShort = swapV;
-        }
-
-        const xStart = Math.max(0, Math.ceil(xLong - 0.5));
-        const xEnd = Math.min(width - 1, Math.floor(xShort - 0.5));
-        if (xStart > xEnd) {
-            continue;
-        }
-        const span = xShort - xLong;
-        const zStep = span === 0 ? 0 : (zShort - zLong) / span;
-        const uStep = span === 0 ? 0 : (uShort - uLong) / span;
-        const vStep = span === 0 ? 0 : (vShort - vLong) / span;
-        const startOffset = xStart + 0.5 - xLong;
-        let invZ = zLong + zStep * startOffset;
-        let uOverZ = uLong + uStep * startOffset;
-        let vOverZ = vLong + vStep * startOffset;
-        let index = y * width + xStart;
-        for (let x = xStart; x <= xEnd; x++, index++) {
-            if (invZ > depth[index]) {
-                const u = uOverZ / invZ;
-                const v = vOverZ / invZ;
-                if (u >= 0 && v >= 0 && u <= 1 && v <= 1) {
-                    const sx = Math.min(image.width - 1, Math.floor(u * image.width));
-                    const sy = Math.min(image.height - 1, Math.floor(v * image.height));
-                    const source = (sy * image.width + sx) * 4;
-                    if (image.data[source + 3] > 128) {
-                        depth[index] = invZ;
-                        const pixel = index * 4;
-                        pixels[pixel] = image.data[source];
-                        pixels[pixel + 1] = image.data[source + 1];
-                        pixels[pixel + 2] = image.data[source + 2];
-                        pixels[pixel + 3] = 255;
-                    }
-                }
-            }
-            invZ += zStep;
-            uOverZ += uStep;
-            vOverZ += vStep;
+    if (!gl) {
+        gl = glCanvas.getContext("webgl", GL_OPTIONS);
+        if (!gl) {
+            throw new Error("WebGL is unavailable");
         }
     }
+    if (gl.isContextLost()) {
+        return null;
+    }
+    if (!programsReady) {
+        initPrograms(gl);
+        programsReady = true;
+    }
+    return gl;
+}
+
+function initPrograms(gpu: WebGLRenderingContext): void {
+    textures.clear();
+    uploadedTriangles = null;
+    colorProgram = linkProgram(gpu, COLOR_VS, COLOR_FS, ["a_position", "a_color"]);
+    colorViewProj = gpu.getUniformLocation(colorProgram, "u_viewProj");
+    groundProgram = linkProgram(gpu, GROUND_VS, GROUND_FS, ["a_position"]);
+    groundColor = gpu.getUniformLocation(groundProgram, "u_color");
+    spriteProgram = linkProgram(gpu, SPRITE_VS, SPRITE_FS, ["a_position", "a_uv"]);
+    spriteViewProj = gpu.getUniformLocation(spriteProgram, "u_viewProj");
+    spriteSampler = gpu.getUniformLocation(spriteProgram, "u_texture");
+
+    triBuffer = gpu.createBuffer();
+    groundBuffer = gpu.createBuffer();
+    spriteBuffer = gpu.createBuffer();
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
+    gpu.bufferData(gpu.ARRAY_BUFFER, GROUND_VERTS, gpu.STATIC_DRAW);
+}
+
+function linkProgram(gpu: WebGLRenderingContext, vertexSource: string, fragmentSource: string, attribs: string[]): WebGLProgram {
+    const program = gpu.createProgram();
+    if (!program) {
+        throw new Error("Could not create a WebGL program");
+    }
+    const vertex = compileShader(gpu, gpu.VERTEX_SHADER, vertexSource);
+    const fragment = compileShader(gpu, gpu.FRAGMENT_SHADER, fragmentSource);
+    gpu.attachShader(program, vertex);
+    gpu.attachShader(program, fragment);
+    attribs.forEach((name, index) => gpu.bindAttribLocation(program, index, name));
+    gpu.linkProgram(program);
+    gpu.deleteShader(vertex);
+    gpu.deleteShader(fragment);
+    if (!gpu.getProgramParameter(program, gpu.LINK_STATUS)) {
+        const log = gpu.getProgramInfoLog(program) ?? "";
+        gpu.deleteProgram(program);
+        throw new Error(log || "Could not link a WebGL program");
+    }
+    return program;
+}
+
+function compileShader(gpu: WebGLRenderingContext, type: number, source: string): WebGLShader {
+    const shader = gpu.createShader(type);
+    if (!shader) {
+        throw new Error("Could not create a WebGL shader");
+    }
+    gpu.shaderSource(shader, source);
+    gpu.compileShader(shader);
+    if (!gpu.getShaderParameter(shader, gpu.COMPILE_STATUS)) {
+        const log = gpu.getShaderInfoLog(shader) ?? "";
+        gpu.deleteShader(shader);
+        throw new Error(log || "Could not compile a WebGL shader");
+    }
+    return shader;
+}
+
+/** Camera looks down +Z, so clip-space w is the forward depth. */
+function setViewProjection(camera: Camera3D, aspect: number): void {
+    const basis = cameraBasis(camera);
+    const origin = camera.position;
+    const right = basis.right;
+    const up = basis.up;
+    const forward = basis.forward;
+    const tx = -(right.x * origin.x + right.y * origin.y + right.z * origin.z);
+    const ty = -(up.x * origin.x + up.y * origin.y + up.z * origin.z);
+    const tz = -(forward.x * origin.x + forward.y * origin.y + forward.z * origin.z);
+    const focal = 1 / Math.tan(camera.fov / 2);
+    const sx = focal / aspect;
+    const sy = focal;
+    const depth = FAR_PLANE - NEAR_PLANE;
+    const a = (FAR_PLANE + NEAR_PLANE) / depth;
+    const b = (-2 * NEAR_PLANE * FAR_PLANE) / depth;
+    viewProj[0] = sx * right.x;
+    viewProj[1] = sy * up.x;
+    viewProj[2] = a * forward.x;
+    viewProj[3] = forward.x;
+    viewProj[4] = sx * right.y;
+    viewProj[5] = sy * up.y;
+    viewProj[6] = a * forward.y;
+    viewProj[7] = forward.y;
+    viewProj[8] = sx * right.z;
+    viewProj[9] = sy * up.z;
+    viewProj[10] = a * forward.z;
+    viewProj[11] = forward.z;
+    viewProj[12] = sx * tx;
+    viewProj[13] = sy * ty;
+    viewProj[14] = a * tz + b;
+    viewProj[15] = tz;
 }
 
 function cameraBasis(camera: Camera3D): { right: Vec3; up: Vec3; forward: Vec3 } {
@@ -453,51 +512,6 @@ function cameraBasis(camera: Camera3D): { right: Vec3; up: Vec3; forward: Vec3 }
             y: cos,
             z: -yawForward.z * sin,
         },
-    };
-}
-
-function toCamera(point: Vec3, origin: Vec3, basis: { right: Vec3; up: Vec3; forward: Vec3 }): CameraPoint {
-    const x = point.x - origin.x;
-    const y = point.y - origin.y;
-    const z = point.z - origin.z;
-    return {
-        x: x * basis.right.x + y * basis.right.y + z * basis.right.z,
-        y: x * basis.up.x + y * basis.up.y + z * basis.up.z,
-        z: x * basis.forward.x + y * basis.forward.y + z * basis.forward.z,
-    };
-}
-
-function clipNear(points: CameraPoint[], near: number): CameraPoint[] {
-    const output: CameraPoint[] = [];
-    for (let index = 0; index < points.length; index++) {
-        const current = points[index];
-        const previous = points[(index + points.length - 1) % points.length];
-        const currentIn = current.z >= near;
-        const previousIn = previous.z >= near;
-        if (currentIn !== previousIn && current.z !== previous.z) {
-            const t = (near - previous.z) / (current.z - previous.z);
-            output.push({
-                x: previous.x + (current.x - previous.x) * t,
-                y: previous.y + (current.y - previous.y) * t,
-                z: near,
-            });
-        }
-        if (currentIn) {
-            output.push(current);
-        }
-    }
-    return output;
-}
-
-function projectLocal(point: CameraPoint, fov: number, width: number, height: number): ScreenVertex {
-    const focal = 1 / Math.tan(fov / 2);
-    const aspect = width / height;
-    const ndcX = (point.x / point.z) * focal / aspect;
-    const ndcY = (point.y / point.z) * focal;
-    return {
-        x: (ndcX + 1) * 0.5 * width,
-        y: (1 - ndcY) * 0.5 * height,
-        invZ: 1 / point.z,
     };
 }
 

@@ -5,9 +5,9 @@ import { getGameState, switchGameState } from "../game/gameState";
  * 
  * Based on this number the game director decides what should be the next event
  */
-export type EventType = "SHOP" | "TRAVEL" | "COMBAT";
+export type EventType = "SHOP" | "TRAVEL" | "COMBAT" | "EXPLORATION";
 
-const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL"];
+const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "EXPLORATION", "TRAVEL", "COMBAT", "TRAVEL"];
 
 
 
@@ -43,12 +43,25 @@ export function transitionToNextEvent() {
     const nextEventType = getEventTypeForIndex(director.eventIndex);
     director.currentEventType = nextEventType;
 
-    // switch scene to match
-    if (nextEventType == "SHOP") {
-        switchGameState("BUILDING_SCREEN");
-    } else {
-        switchGameState("COMBAT_SCREEN");
+    switchGameState(screenForEvent(nextEventType));
+}
+
+/** The travel stop offers this when the next event is an exploration. */
+export function chooseExploration(choice: "explore" | "skip"): void {
+    const director = getGameState().gameDirector;
+    director.eventIndex += choice === "explore" ? 1 : 2;
+    director.currentEventType = getEventTypeForIndex(director.eventIndex);
+    switchGameState(screenForEvent(director.currentEventType));
+}
+
+function screenForEvent(eventType: EventType): "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" {
+    if (eventType === "SHOP") {
+        return "BUILDING_SCREEN";
     }
+    if (eventType === "EXPLORATION") {
+        return "EXPLORATION_SCREEN";
+    }
+    return "COMBAT_SCREEN";
 }
 
 export function getEventTypeForIndex(eventIndex: number): EventType {

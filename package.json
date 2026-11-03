@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx --test tests/combat.test.ts tests/building.test.ts",
+    "test": "tsx --test tests/combat.test.ts tests/building.test.ts tests/exploration.test.ts",
     "export:itch": "npm run build && rm -f tank-game.zip && cd dist && zip -r ../tank-game.zip ."
   },
   "devDependencies": {

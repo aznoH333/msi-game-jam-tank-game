@@ -1,11 +1,12 @@
 import { GameDirector, initGameDirector } from "../gamedirector/gamedirector";
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
+import { explorationScreenUpdate } from "./explorationScreen";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
 
 
-export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN";
+export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN";
 
 export interface GameState {
     currentScreen: GameScreen;
@@ -52,6 +53,10 @@ export function updateGame(state: GameState) {
 
         case "COMBAT_SCREEN":
             combatScreenUpdate();
+            break;
+
+        case "EXPLORATION_SCREEN":
+            explorationScreenUpdate();
             break;
     }
 }

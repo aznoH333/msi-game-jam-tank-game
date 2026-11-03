@@ -73,6 +73,21 @@ export function clientToGame(clientX: number, clientY: number): { x: number; y: 
     };
 }
 
+/** Match the game frame's bitmap and screen rectangle. Used by the WebGL canvas behind it. */
+export function mirrorGameCanvas(target: HTMLCanvasElement): void {
+    if (!canvasElement) {
+        return;
+    }
+    target.style.left = canvasElement.style.left;
+    target.style.top = canvasElement.style.top;
+    target.style.width = canvasElement.style.width;
+    target.style.height = canvasElement.style.height;
+    if (target.width !== canvasElement.width || target.height !== canvasElement.height) {
+        target.width = canvasElement.width;
+        target.height = canvasElement.height;
+    }
+}
+
 export function getCanvasContext(): CanvasRenderingContext2D {
     if (!activeContext) {
         throw new Error("Canvas is not initialized");

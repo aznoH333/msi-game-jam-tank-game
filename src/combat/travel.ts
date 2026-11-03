@@ -4,7 +4,7 @@ import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
 import { drawText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
-import { getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
+import { chooseExploration, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
 import { drawCombatVehicle } from "./combatView";
@@ -104,6 +104,10 @@ export function updateTravel(): void {
     if (!stopped) {
         return;
     }
+    if (nextEvent === "EXPLORATION") {
+        drawExplorationChoice(cityView.x, cityView.width, viewHeight, leftPressed, mouse);
+        return;
+    }
     const button = travelButtonBounds(cityView.x, cityView.width, viewHeight);
     if (
         leftPressed
@@ -128,6 +132,61 @@ export function updateTravel(): void {
         y: button.y + button.height / 2,
         font: "22px sans-serif",
         color: "#f4fff6",
+        align: "center",
+        baseline: "middle",
+    });
+}
+
+function drawExplorationChoice(
+    viewX: number,
+    viewWidth: number,
+    viewHeight: number,
+    leftPressed: boolean,
+    mouse: { x: number; y: number },
+): void {
+    const height = 52;
+    const width = 180;
+    const y = viewHeight - 78;
+    const explore = { x: viewX + viewWidth / 2 - width - 8, y, width, height };
+    const skip = { x: viewX + viewWidth / 2 + 8, y, width, height };
+    if (leftPressed && hitsButton(explore, mouse)) {
+        chooseExploration("explore");
+        return;
+    }
+    if (leftPressed && hitsButton(skip, mouse)) {
+        chooseExploration("skip");
+        return;
+    }
+    drawChoiceButton(explore, "Explore", "#2f9e44", "#f4fff6");
+    drawChoiceButton(skip, "Skip", "#2a3040", "#eceae4");
+}
+
+function hitsButton(button: { x: number; y: number; width: number; height: number }, mouse: { x: number; y: number }): boolean {
+    return mouse.x >= button.x
+        && mouse.y >= button.y
+        && mouse.x < button.x + button.width
+        && mouse.y < button.y + button.height;
+}
+
+function drawChoiceButton(
+    button: { x: number; y: number; width: number; height: number },
+    label: string,
+    color: string,
+    textColor: string,
+): void {
+    drawRect({
+        x: button.x,
+        y: button.y,
+        width: button.width,
+        height: button.height,
+        color,
+    });
+    drawText({
+        text: label,
+        x: button.x + button.width / 2,
+        y: button.y + button.height / 2,
+        font: "22px sans-serif",
+        color: textColor,
         align: "center",
         baseline: "middle",
     });
