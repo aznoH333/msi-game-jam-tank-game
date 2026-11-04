@@ -17,6 +17,9 @@ type QueuedSprite = {
     scaleX: number;
     scaleY: number;
     rotationRad: number;
+    /** Source-pixel point that stays on x, y. Null uses the image center. */
+    originX: number | null;
+    originY: number | null;
     alpha: number;
     color?: string;
     clip: DrawClip | null;
@@ -55,6 +58,9 @@ export interface DrawCommand {
     scaleX?: number;
     scaleY?: number;
     rotationRad?: number;
+    /** Rotation pivot in the sprite's own pixels. Defaults to the image center. */
+    originX?: number;
+    originY?: number;
     /** 0 is invisible, 1 is opaque. */
     alpha?: number;
     /** Recolors the sprite while keeping its shape. */
@@ -69,6 +75,8 @@ export function drawSprite({
     scaleX = 1,
     scaleY = 1,
     rotationRad = 0,
+    originX,
+    originY,
     alpha = 1,
     color,
 }: DrawCommand) {
@@ -80,6 +88,8 @@ export function drawSprite({
         scaleX,
         scaleY,
         rotationRad,
+        originX: originX ?? null,
+        originY: originY ?? null,
         alpha,
         color,
         clip: getDrawClip(),
@@ -115,7 +125,7 @@ export function renderSprites(): void {
             continue;
         }
 
-        // draw the sprite centered on x, y
+        // the pivot pixel stays on x, y while the sprite rotates
         context.save();
         if (draw.clip) {
             context.beginPath();
@@ -126,6 +136,8 @@ export function renderSprites(): void {
         context.rotate(draw.rotationRad);
         context.scale(draw.scaleX, draw.scaleY);
         context.globalAlpha = draw.alpha;
+        const pivotX = draw.originX ?? image.width / 2;
+        const pivotY = draw.originY ?? image.height / 2;
 
         if (draw.color) {
             // tint the sprite and keep its shape
@@ -146,12 +158,12 @@ export function renderSprites(): void {
                 tintContext.drawImage(image, 0, 0);
                 
                 context.globalCompositeOperation = "source-over";
-                context.drawImage(tintCanvas, -image.width / 2, -image.height / 2);
+                context.drawImage(tintCanvas, -pivotX, -pivotY);
                 context.globalCompositeOperation = "source-over";
 
             }
         } else {
-            context.drawImage(image, -image.width / 2, -image.height / 2);
+            context.drawImage(image, -pivotX, -pivotY);
         }
 
         context.restore();

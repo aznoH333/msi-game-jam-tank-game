@@ -1,4 +1,4 @@
-import { clearCanvas, fitCanvasToView, initCanvas, renderCircles, renderRects } from "./drawing/canvas";
+import { clearCanvas, fitCanvasToView, initCanvas, renderCircles, renderOverlayRects, renderRects } from "./drawing/canvas";
 import { render3D } from "./drawing/3d";
 import { loadSprites, renderSprites } from "./drawing/sprites";
 import { renderText } from "./drawing/text";
@@ -15,6 +15,7 @@ function loop(): void {
     render3D();
     renderRects();
     renderSprites();
+    renderOverlayRects();
     renderCircles();
     renderText();
     requestAnimationFrame(loop);

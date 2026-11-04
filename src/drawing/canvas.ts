@@ -128,6 +128,7 @@ interface QueuedRect {
     height: number;
     color: string;
     zIndex: number;
+    rotationRad: number;
     stroke: boolean;
     lineWidth: number;
     clip: DrawClip | null;
@@ -142,6 +143,8 @@ export interface DrawRectCommand {
     height: number;
     color: string;
     zIndex?: number;
+    /** Radians around the rectangle center. Zero stays axis-aligned. */
+    rotationRad?: number;
 }
 
 export function drawRect({
@@ -151,8 +154,20 @@ export function drawRect({
     height,
     color,
     zIndex = 0,
+    rotationRad = 0,
 }: DrawRectCommand): void {
-    queuedRects.push({ x, y, width, height, color, zIndex, stroke: false, lineWidth: 0, clip: activeClip });
+    queuedRects.push({
+        x,
+        y,
+        width,
+        height,
+        color,
+        zIndex,
+        rotationRad,
+        stroke: false,
+        lineWidth: 0,
+        clip: activeClip,
+    });
 }
 
 export interface StrokeRectCommand {
@@ -174,7 +189,7 @@ export function strokeRect({
     lineWidth = 1,
     zIndex = 0,
 }: StrokeRectCommand): void {
-    queuedRects.push({ x, y, width, height, color, zIndex, stroke: true, lineWidth, clip: activeClip });
+    queuedRects.push({ x, y, width, height, color, zIndex, rotationRad: 0, stroke: true, lineWidth, clip: activeClip });
 }
 
 interface QueuedCircle {
@@ -249,11 +264,8 @@ export function renderCircles(): void {
     }
 }
 
-/** Paint rectangles queued by drawRect and strokeRect. Lower zIndex is drawn first. */
-export function renderRects(): void {
-    const draws = queuedRects.splice(0);
+function paintRects(draws: QueuedRect[]): void {
     draws.sort((a, b) => a.zIndex - b.zIndex);
-
     const context = getCanvasContext();
     for (const draw of draws) {
         context.save();
@@ -266,10 +278,34 @@ export function renderRects(): void {
             context.strokeStyle = draw.color;
             context.lineWidth = draw.lineWidth;
             context.strokeRect(draw.x, draw.y, draw.width, draw.height);
+        } else if (draw.rotationRad !== 0) {
+            context.translate(draw.x + draw.width / 2, draw.y + draw.height / 2);
+            context.rotate(draw.rotationRad);
+            context.fillStyle = draw.color;
+            context.fillRect(-draw.width / 2, -draw.height / 2, draw.width, draw.height);
         } else {
             context.fillStyle = draw.color;
             context.fillRect(draw.x, draw.y, draw.width, draw.height);
         }
         context.restore();
     }
+}
+
+/** Paint rectangles at zIndex 0 and below. These sit under sprites. */
+export function renderRects(): void {
+    const pending = queuedRects.splice(0);
+    const under: QueuedRect[] = [];
+    for (const draw of pending) {
+        if (draw.zIndex > 0) {
+            queuedRects.push(draw);
+        } else {
+            under.push(draw);
+        }
+    }
+    paintRects(under);
+}
+
+/** Paint rectangles queued above zIndex 0. Call this after sprites. */
+export function renderOverlayRects(): void {
+    paintRects(queuedRects.splice(0));
 }

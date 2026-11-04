@@ -237,6 +237,27 @@ describe("combat loop", () => {
         assert.equal(outcome.player.tiles[0].health, 200 - 200 * FAIL_DAMAGE_OF_MAX_HEALTH);
         assert.ok(Math.abs(outcome.player.energy - (105 - 10)) < 0.001);
     });
+
+    it("throws more sparks from a harder hit, then lets them fly out and fade", () => {
+        const light = combatMatch(
+            vehicle("Player", [gun(0, 0, 30, 10), battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const lightAim = light.tile("enemy", 0);
+        const lightHit = light.at(0, "player", { fire: { gun: 0, at: lightAim } }).run(0.25);
+        assert.ok(lightHit.sparks.length > 0);
+        for (const spark of lightHit.sparks) {
+            assert.ok(Math.hypot(spark.x - lightAim.x, spark.y - lightAim.y) > 0.3);
+        }
+        assert.equal(light.run(1).sparks.length, 0);
+
+        const heavy = combatMatch(
+            vehicle("Player", [gun(0, 0, 60, 10), battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const heavyHit = heavy.at(0, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(0.25);
+        assert.ok(heavyHit.sparks.length > lightHit.sparks.length);
+    });
 });
 
 function chanceOverclock(kind: "jamChance" | "failChance"): PlacedTile["overclocks"][number] {

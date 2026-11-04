@@ -81,7 +81,7 @@ export function updateTravel(): void {
     });
 
     const vehicle = presentationVehicle(state.playerData.vehicle);
-    drawCombatVehicle(vehicle, playerView, vehicle.base.name, false, vehicle.tiles.map(() => 0));
+    drawCombatVehicle(vehicle, playerView, vehicle.base.name, false, vehicle.tiles.map(() => 0), 0, 0, cameraZ);
     drawRect({
         x: ABILITY_BAR_WIDTH,
         y: viewHeight - 1,

@@ -1,5 +1,5 @@
 import { getOverclockedTurretStats, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
-import { TILE_SIZE_PX, type BaseTile, type PlacedTile } from "../building/types/tiles";
+import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type PlacedTile } from "../building/types/tiles";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
@@ -238,8 +238,10 @@ export function drawVehicleDetailsSidebar(
     const previewScale = previewSize / (Math.max(shown.width, shown.height) * TILE_SIZE_PX);
     const previewCenterX = previewX + previewSize / 2;
     const previewCenterY = previewY + previewSize / 2;
+    const previewXCell = overclockTile?.x ?? 0;
+    const previewYCell = overclockTile?.y ?? 0;
     drawSprite({
-        sprite: shown.tileSprite,
+        sprite: tileSpriteAt(shown.tileSprite, previewXCell, previewYCell),
         x: previewCenterX,
         y: previewCenterY,
         scaleX: previewScale,
@@ -253,6 +255,8 @@ export function drawVehicleDetailsSidebar(
             y: previewCenterY,
             scaleX: previewScale,
             scaleY: previewScale,
+            originX: shown.turret.spriteCenterX,
+            originY: shown.turret.spriteCenterY,
             zIndex: 6,
         });
     }

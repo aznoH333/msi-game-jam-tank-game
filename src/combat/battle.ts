@@ -17,6 +17,11 @@ import {
     REPAIR_RADIUS,
     REPAIR_REVIVE_RATIO,
     REPAIR_TICK_FRAMES,
+    SPARK_DAMAGE_PER_SPARK,
+    SPARK_DURATION,
+    SPARK_MAX_PER_HIT,
+    SPARK_MAX_SPEED,
+    SPARK_MIN_SPEED,
     TANK_SEPARATION,
 } from "./constants";
 import {
@@ -63,6 +68,7 @@ interface Projectile {
     explosionRadius: number;
     damage: number;
     projectileType: ProjectileType;
+    projectileSprite: string;
     /** The tank that fired this shot. Direct hits ignore its tiles. */
     owner: Combatant;
 }
@@ -83,6 +89,15 @@ export interface Explosion {
     y: number;
     radius: number;
     age: number;
+}
+
+export interface Spark {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    age: number;
+    duration: number;
 }
 
 interface CombatInput {
@@ -109,6 +124,7 @@ export interface Battle {
     enemy: Combatant;
     projectiles: Projectile[];
     explosions: Explosion[];
+    sparks: Spark[];
     repairs: RepairCircle[];
     result: "victory" | "defeat" | null;
     /** Catalog bounty for defeating this enemy. Paid only on victory. */
@@ -147,6 +163,7 @@ export interface CombatState {
     moneyDropped: number;
     player: CombatSideState;
     enemy: CombatSideState;
+    sparks: { x: number; y: number }[];
 }
 
 export function gunsOf(instance: VehicleInstance): TileInstance[] {
@@ -256,6 +273,7 @@ export function combatSnapshot(battle: Battle): CombatState {
         moneyDropped: battle.result === "victory" ? battle.moneyDropped : 0,
         player: sideState(battle.player),
         enemy: sideState(battle.enemy),
+        sparks: battle.sparks.map((spark) => ({ x: spark.x, y: spark.y })),
     };
 }
 
@@ -505,6 +523,7 @@ function updateCombatant(
                     explosionRadius: Math.max(0, stats.explosionRadius),
                     damage: Math.max(0, stats.damagePerShot),
                     projectileType: turret.projectileType,
+                    projectileSprite: turret.projectileSprite || "weapons/bullet",
                     owner: combatant,
                 });
                 runtime.shotsLeft -= 1;
@@ -605,9 +624,33 @@ function earliestTileHit(
     return best;
 }
 
+/** Sparks fly out from the tile, with more of them for a harder hit. */
+function spawnSparks(battle: Battle, x: number, y: number, damage: number): void {
+    if (damage <= 0) {
+        return;
+    }
+    const count = Math.min(SPARK_MAX_PER_HIT, Math.max(1, Math.round(damage / SPARK_DAMAGE_PER_SPARK)));
+    for (let index = 0; index < count; index++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = SPARK_MIN_SPEED + Math.random() * (SPARK_MAX_SPEED - SPARK_MIN_SPEED);
+        battle.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            age: 0,
+            duration: SPARK_DURATION,
+        });
+    }
+}
+
 /** Wipe whatever is left of a beaten tank and burst it from the center. */
 function destroyDefeatedTank(battle: Battle, combatant: Combatant, camera: CombatCamera | null): void {
     for (const part of combatant.instance.tiles) {
+        if (part.health > 0 && camera) {
+            const origin = tileToWorld(camera, part.tile.x, part.tile.y, part.tile.base.width, part.tile.base.height);
+            spawnSparks(battle, origin.x, origin.y, part.health);
+        }
         part.health = 0;
     }
     for (const gun of combatant.guns) {
@@ -663,7 +706,16 @@ function detonate(
                 if (falloff <= 0) {
                     continue;
                 }
-                part.health -= boom.damage * falloff;
+                const dealt = Math.min(part.health, boom.damage * falloff);
+                part.health -= dealt;
+                const origin = tileToWorld(
+                    target.camera,
+                    tile.x,
+                    tile.y,
+                    tile.base.width,
+                    tile.base.height,
+                );
+                spawnSparks(battle, origin.x, origin.y, dealt);
                 if (part.health > 0) {
                     continue;
                 }
@@ -677,13 +729,6 @@ function detonate(
                 if (deathRadius === undefined || deathDamage === undefined) {
                     continue;
                 }
-                const origin = tileToWorld(
-                    target.camera,
-                    tile.x,
-                    tile.y,
-                    tile.base.width,
-                    tile.base.height,
-                );
                 pending.push({
                     x: origin.x,
                     y: origin.y,
@@ -716,6 +761,7 @@ export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehic
         enemy: createCombatant(enemyVehicle, "ENEMY"),
         projectiles: [],
         explosions: [],
+        sparks: [],
         repairs: [],
         result: null,
         moneyDropped,
@@ -805,5 +851,15 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
         }
     }
     battle.explosions = stillBursting;
+    const stillSparking: Spark[] = [];
+    for (const spark of battle.sparks) {
+        spark.age += dt;
+        spark.x += spark.vx * dt;
+        spark.y += spark.vy * dt;
+        if (spark.age < spark.duration) {
+            stillSparking.push(spark);
+        }
+    }
+    battle.sparks = stillSparking;
     battle.time += dt;
 }

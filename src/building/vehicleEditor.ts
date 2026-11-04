@@ -13,7 +13,8 @@ import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInpu
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
 import { brokenVehicleRules, buyWeaponSlot, canAddWeapon, nextWeaponSlotPrice, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
-import { TILE_SIZE_PX, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
+import { TANK_TRACK_SPRITE, tankTrackColumns } from "./tankTracks";
+import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
 const GRID_COLUMNS = 32;
@@ -155,6 +156,8 @@ function placementOrigin(grid: GridGeometry, mouseX: number, mouseY: number, til
 
 function drawTileSprite(
     tile: BaseTile,
+    tileX: number,
+    tileY: number,
     centerX: number,
     centerY: number,
     scale: number,
@@ -163,7 +166,7 @@ function drawTileSprite(
     color?: string,
 ): void {
     drawSprite({
-        sprite: tile.tileSprite,
+        sprite: tileSpriteAt(tile.tileSprite, tileX, tileY),
         x: centerX,
         y: centerY,
         scaleX: scale,
@@ -173,7 +176,7 @@ function drawTileSprite(
         color,
     });
 
-    // turret sits on top of the base, in the same pixel scale
+    // turret sits on top of the base, pivoted on its sprite center
     if (tile.turret) {
         drawSprite({
             sprite: tile.turret.turretSprite,
@@ -181,6 +184,8 @@ function drawTileSprite(
             y: centerY,
             scaleX: scale,
             scaleY: scale,
+            originX: tile.turret.spriteCenterX,
+            originY: tile.turret.spriteCenterY,
             zIndex: zIndex + 1,
             alpha,
             color,
@@ -458,6 +463,25 @@ export function updateVehicleEditor(state: GameState): void {
         }
     }
 
+    const trackScale = grid.cell / TILE_SIZE_PX;
+    for (const track of tankTrackColumns(state.playerData.vehicle.tiles.map((placed) => ({
+        x: placed.x,
+        y: placed.y,
+        width: placed.base.width,
+        height: placed.base.height,
+    })))) {
+        for (let step = 0; step < track.length; step++) {
+            drawSprite({
+                sprite: TANK_TRACK_SPRITE,
+                x: grid.x + (track.x + 0.5) * grid.cell,
+                y: grid.y + (track.y + step + 0.5) * grid.cell,
+                scaleX: trackScale,
+                scaleY: trackScale,
+                zIndex: 0,
+            });
+        }
+    }
+
     // tiles already on the vehicle
     for (const placed of state.playerData.vehicle.tiles) {
         drawRect({
@@ -469,6 +493,8 @@ export function updateVehicleEditor(state: GameState): void {
         });
         drawTileSprite(
             placed.base,
+            placed.x,
+            placed.y,
             grid.x + (placed.x + placed.base.width / 2) * grid.cell,
             grid.y + (placed.y + placed.base.height / 2) * grid.cell,
             grid.cell / TILE_SIZE_PX,
@@ -500,6 +526,8 @@ export function updateVehicleEditor(state: GameState): void {
 
         drawTileSprite(
             selectedTile,
+            origin.x,
+            origin.y,
             grid.x + (origin.x + selectedTile.width / 2) * grid.cell,
             grid.y + (origin.y + selectedTile.height / 2) * grid.cell,
             grid.cell / TILE_SIZE_PX,

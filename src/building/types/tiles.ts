@@ -20,7 +20,7 @@ export interface BaseTile{
     tileName: string;
     
     type: TileType;
-    tileSprite: string;
+    tileSprite: string[];
     width: number;
     height: number;
     
@@ -35,6 +35,23 @@ export interface BaseTile{
 
     price: number;
     turret?: BaseTurret;
+}
+
+/** Pick one authored sprite from the tile's list. The same cell always gets the same sprite. */
+export function tileSpriteAt(tileSprite: readonly string[] | string, x: number, y: number): string {
+    const sprites = typeof tileSprite === "string" ? [tileSprite] : tileSprite;
+    if (sprites.length === 0) {
+        return "";
+    }
+    if (sprites.length === 1) {
+        return sprites[0];
+    }
+    // Mix the coordinates so neighbors do not fall into stripes.
+    let mixed = Math.imul(x | 0, 0x9E3779B1) ^ Math.imul(y | 0, 0x85EBCA77);
+    mixed = Math.imul(mixed ^ (mixed >>> 16), 0x7FEB352D);
+    mixed = Math.imul(mixed ^ (mixed >>> 15), 0x846CA68B);
+    mixed = (mixed ^ (mixed >>> 16)) >>> 0;
+    return sprites[mixed % sprites.length];
 }
 
 
@@ -87,6 +104,13 @@ export type ProjectileType = "direct" | "mortar"
  */
 export interface BaseTurret {
     turretSprite: string;
+    /** Where is the center of the turret sprite (rotation origin) in pixels */
+    spriteCenterX: number; 
+
+    /** Where is the center of the turret sprite (rotation origin) in pixels */
+    spriteCenterY: number;
+
+    projectileSprite: string;
 
     /** How much damage an individual projectile does */
     damagePerShot: number;

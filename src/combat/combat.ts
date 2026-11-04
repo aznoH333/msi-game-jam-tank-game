@@ -21,6 +21,7 @@ import {
     type Combatant,
     type CombatantOrders,
     type Explosion,
+    type Spark,
 } from "./battle";
 import { EXPLOSION_DURATION, REPAIR_RADIUS } from "./constants";
 import {
@@ -32,7 +33,6 @@ import {
     type CombatCamera,
 } from "./combatView";
 
-const PROJECTILE_SPRITE = "combat/debug_projectile";
 const EXPLOSION_SPRITE = "combat/debug_explosion";
 const ATTACK_RANGE_FILL = "rgba(214, 64, 52, 0.28)";
 const ATTACK_RANGE_STROKE = "rgba(255, 120, 108, 0.95)";
@@ -137,6 +137,7 @@ function drawWorldProjectile(
     worldY: number,
     worldDx: number,
     worldDy: number,
+    sprite: string,
 ): void {
     const screen = worldToScreen(camera, worldX, worldY);
     const view = camera.view;
@@ -148,17 +149,47 @@ function drawWorldProjectile(
     ) {
         return;
     }
-    const scale = camera.layout.cell / TILE_SIZE_PX * 0.5;
+    const scale = camera.layout.cell / TILE_SIZE_PX;
     const previousClip = getDrawClip();
     setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
     drawSprite({
-        sprite: PROJECTILE_SPRITE,
+        sprite,
         x: screen.x,
         y: screen.y,
         scaleX: scale,
         scaleY: scale,
         rotationRad: aimRotation(worldDx, worldDy, false),
         zIndex: 5,
+    });
+    setDrawClip(previousClip);
+}
+
+/** A spark is a white streak pointing the way it is flying. */
+function drawSpark(camera: CombatCamera, spark: Spark): void {
+    const screen = worldToScreen(camera, spark.x, spark.y);
+    const view = camera.view;
+    const margin = 24;
+    if (
+        screen.x < view.x - margin || screen.y < view.y - margin
+        || screen.x > view.x + view.width + margin
+        || screen.y > view.y + view.height + margin
+    ) {
+        return;
+    }
+    const length = camera.layout.cell * 0.7;
+    const thickness = 2;
+    const ahead = worldToScreen(camera, spark.x + spark.vx, spark.y + spark.vy);
+    const alpha = Math.max(0, 1 - spark.age / spark.duration);
+    const previousClip = getDrawClip();
+    setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
+    drawRect({
+        x: screen.x - length / 2,
+        y: screen.y - thickness / 2,
+        width: length,
+        height: thickness,
+        color: `rgba(255, 255, 255, ${alpha})`,
+        rotationRad: Math.atan2(ahead.y - screen.y, ahead.x - screen.x),
+        zIndex: 4,
     });
     setDrawClip(previousClip);
 }
@@ -327,10 +358,10 @@ export function updateCombat(): void {
         const worldDx = shot.toX - shot.fromX;
         const worldDy = shot.toY - shot.fromY;
         if (playerCamera) {
-            drawWorldProjectile(playerCamera, x, y, worldDx, worldDy);
+            drawWorldProjectile(playerCamera, x, y, worldDx, worldDy, shot.projectileSprite);
         }
         if (enemyCamera) {
-            drawWorldProjectile(enemyCamera, x, y, worldDx, worldDy);
+            drawWorldProjectile(enemyCamera, x, y, worldDx, worldDy, shot.projectileSprite);
         }
     }
 
@@ -374,6 +405,14 @@ export function updateCombat(): void {
         }
         if (enemyCamera) {
             drawExplosion(enemyCamera, explosion, growth);
+        }
+    }
+    for (const spark of fight.sparks) {
+        if (playerCamera) {
+            drawSpark(playerCamera, spark);
+        }
+        if (enemyCamera) {
+            drawSpark(enemyCamera, spark);
         }
     }
     setDrawClip(null);

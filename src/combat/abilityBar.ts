@@ -1,6 +1,6 @@
 import { DEFEAT_HEALTH_RATIO, ABILITY_BAR_WIDTH } from "./constants";
 import type { TileInstance } from "./types/tileInstance";
-import { TILE_SIZE_PX } from "../building/types/tiles";
+import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
@@ -113,7 +113,7 @@ export function drawAbilityBar(
         const iconX = button.x + 12 + iconSize / 2;
         const iconY = button.y + button.height / 2;
         drawSprite({
-            sprite: gun.tile.base.tileSprite,
+            sprite: tileSpriteAt(gun.tile.base.tileSprite, gun.tile.x, gun.tile.y),
             x: iconX,
             y: iconY,
             scaleX: scale,
@@ -127,6 +127,8 @@ export function drawAbilityBar(
                 y: iconY,
                 scaleX: scale,
                 scaleY: scale,
+                originX: gun.tile.base.turret.spriteCenterX,
+                originY: gun.tile.base.turret.spriteCenterY,
                 zIndex: 4,
             });
         }
@@ -226,6 +228,7 @@ export function drawHealthBar(x: number, y: number, width: number, ratio: number
         width,
         height: barHeight,
         color: "#141820",
+        zIndex: 8,
     });
     if (shown > 0) {
         drawRect({
@@ -234,6 +237,7 @@ export function drawHealthBar(x: number, y: number, width: number, ratio: number
             width: Math.max(1, width * shown),
             height: barHeight,
             color: shown < DEFEAT_HEALTH_RATIO ? "#d35b4a" : "#3fbe6e",
+            zIndex: 8,
         });
     }
     drawRect({
@@ -242,6 +246,7 @@ export function drawHealthBar(x: number, y: number, width: number, ratio: number
         width: 2,
         height: barHeight,
         color: "#e6c07b",
+        zIndex: 8,
     });
 }
 
@@ -310,6 +315,7 @@ export function drawEnergyReadout(
         width,
         height: barHeight,
         color: "#141820",
+        zIndex: 8,
     });
     const ratio = shownCapacity <= 0 ? 0 : Math.min(1, shownCurrent / shownCapacity);
     if (ratio > 0) {
@@ -319,6 +325,7 @@ export function drawEnergyReadout(
             width: Math.max(1, width * ratio),
             height: barHeight,
             color: "#3d9ee8",
+            zIndex: 8,
         });
     }
 }

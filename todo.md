@@ -18,7 +18,12 @@
 
 
 # short term goals.
-- [X] Add repair ability to combat
-- [X] Make enemies drop loot
-- [X] Make overclocks cost new currency
-- [ ] Start working on the first person sections
+- [X] impl new tiles and variations
+- [X] better explosion
+- [ ] spark effects
+- [ ] impl tracks
+- [ ] impl ground sprite
+- [ ] travel buildings and floor
+- [ ] travel icons
+- [ ] talking guy
+- [ ] guy dialog

@@ -45,3 +45,16 @@ export const FAIL_EXPLOSION_RADIUS = 2.5;
 
 /** A failed shot's blast damage, as a share of that gun tile's max health. */
 export const FAIL_DAMAGE_OF_MAX_HEALTH = 0.25;
+
+/** One spark per this many hit points a tile actually loses. */
+export const SPARK_DAMAGE_PER_SPARK = 5;
+
+/** Cap so one hit cannot flood the screen. */
+export const SPARK_MAX_PER_HIT = 24;
+
+/** How long a spark stays visible, in seconds. */
+export const SPARK_DURATION = 0.4;
+
+/** Outward speed of a spark, in tiles per second. */
+export const SPARK_MIN_SPEED = 8;
+export const SPARK_MAX_SPEED = 16;

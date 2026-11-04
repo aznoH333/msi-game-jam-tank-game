@@ -1,6 +1,7 @@
-import { TILE_SIZE_PX } from "../building/types/tiles";
-import { drawRect, setDrawClip, strokeRect } from "../drawing/canvas";
-import { drawSprite } from "../drawing/sprites";
+import { tankTrackColumns, tankTrackSprite } from "../building/tankTracks";
+import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
+import { drawRect, getDrawClip, setDrawClip, strokeRect } from "../drawing/canvas";
+import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import type { VehicleInstance } from "./types/vehicleInstance";
 import {
@@ -10,7 +11,10 @@ import {
     type CombatViewport,
 } from "./combatLayout";
 
-const DESTROYED_TILE_SPRITE = "tiles/debug_tile_destroyed";
+const BROKEN_TILE_SPRITES = ["tiles/tiles_1x1_0007", "tiles/tiles_1x1_0008"];
+const GROUND_SPRITE = "combat/ground";
+/** Source pixel of the road that sits on the vehicle center. The strip is 620 wide. */
+const GROUND_CENTER_X = 310;
 
 export {
     aimRotation,
@@ -34,6 +38,8 @@ export function drawCombatVehicle(
     turretRotations: readonly number[],
     shakeX = 0,
     shakeY = 0,
+    /** Tiles of forward travel. Scrolls the road and steps the treads. Zero holds both still. */
+    scrollTiles = 0,
 ): void {
     setDrawClip(null);
     drawRect({
@@ -68,7 +74,31 @@ export function drawCombatVehicle(
     }
 
     const footprintCenterY = layout.originY + (layout.minY + layout.maxY) / 2 * layout.cell;
+    drawCombatGround(view, layout, shakeX, shakeY, scrollTiles);
     setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
+    const scale = layout.cell / TILE_SIZE_PX;
+    const trackSprite = tankTrackSprite(scrollTiles);
+    const tracks = tankTrackColumns(instance.tiles.map((part) => ({
+        x: part.tile.x,
+        y: part.tile.y,
+        width: part.tile.base.width,
+        height: part.tile.base.height,
+    })));
+    for (const track of tracks) {
+        for (let step = 0; step < track.length; step++) {
+            const center = combatTileCenter(layout, track.x, track.y + step, 1, 1, inverted);
+            center.x += shakeX;
+            center.y += shakeY;
+            drawSprite({
+                sprite: trackSprite,
+                x: center.x,
+                y: center.y,
+                scaleX: scale,
+                scaleY: inverted ? -scale : scale,
+                zIndex: 0,
+            });
+        }
+    }
     instance.tiles.forEach((part, index) => {
         const tile = part.tile;
         if (part.health <= 0) {
@@ -100,12 +130,11 @@ export function drawCombatVehicle(
             height,
             color: scaleColor("#3a4254", shade),
         });
-        const scale = layout.cell / TILE_SIZE_PX;
         const center = combatTileCenter(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
         center.x += shakeX;
         center.y += shakeY;
         drawSprite({
-            sprite: tile.base.tileSprite,
+            sprite: tileSpriteAt(tile.base.tileSprite, tile.x, tile.y),
             x: center.x,
             y: center.y,
             scaleX: scale,
@@ -121,12 +150,54 @@ export function drawCombatVehicle(
                 scaleX: scale,
                 scaleY: inverted ? -scale : scale,
                 rotationRad: turretRotations[index] ?? 0,
+                originX: tile.base.turret.spriteCenterX,
+                originY: tile.base.turret.spriteCenterY,
                 color: damageTint,
                 zIndex: 2,
             });
         }
     });
     setDrawClip(null);
+}
+
+/** One road strip, scaled like the tiles, repeated down the view. Pixel 310 sits on the vehicle center. */
+function drawCombatGround(
+    view: CombatViewport,
+    layout: CombatVehicleLayout,
+    shakeX: number,
+    shakeY: number,
+    scrollTiles: number,
+): void {
+    const size = getSpriteSize(GROUND_SPRITE);
+    if (!size || size.height <= 0) {
+        return;
+    }
+    const scale = layout.cell / TILE_SIZE_PX;
+    const drawnHeight = size.height * scale;
+    const centerX = layout.originX + (layout.minX + layout.maxX) / 2 * layout.cell + shakeX;
+    const centerY = layout.originY + (layout.minY + layout.maxY) / 2 * layout.cell + shakeY;
+    const scrollPx = scrollTiles * layout.cell;
+    const phase = ((scrollPx % drawnHeight) + drawnHeight) % drawnHeight;
+    let y = centerY + phase;
+    while (y - drawnHeight / 2 > view.y) {
+        y -= drawnHeight;
+    }
+    const previousClip = getDrawClip();
+    setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
+    const bottom = view.y + view.height;
+    while (y - drawnHeight / 2 < bottom) {
+        drawSprite({
+            sprite: GROUND_SPRITE,
+            x: centerX,
+            y,
+            scaleX: scale,
+            scaleY: scale,
+            originX: GROUND_CENTER_X,
+            zIndex: -1,
+        });
+        y += drawnHeight;
+    }
+    setDrawClip(previousClip);
 }
 
 /** The wreck sprite is one cell. Stamp it across every cell of a larger part. */
@@ -147,7 +218,7 @@ function drawDestroyedTile(
             center.x += shakeX;
             center.y += shakeY;
             drawSprite({
-                sprite: DESTROYED_TILE_SPRITE,
+                sprite: tileSpriteAt(BROKEN_TILE_SPRITES, tileX + x, tileY + y),
                 x: center.x,
                 y: center.y,
                 scaleX: scale,

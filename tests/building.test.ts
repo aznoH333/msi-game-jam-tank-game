@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buyOffer, shopOffers } from "../src/building/itemShop";
+import { tankTrackColumns, tankTrackSprite } from "../src/building/tankTracks";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
 import { adjustOverclock, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
 import { brokenVehicleRules, buyWeaponSlot, nextWeaponSlotPrice } from "../src/building/vehicleRules";
@@ -222,5 +223,32 @@ describe("item shop", () => {
         player.weapons.pistol = 100;
         assert.equal(buyOffer(player, pistolAmmo), false);
         assert.equal(player.weapons.pistol, 100);
+    });
+});
+
+describe("tank tracks", () => {
+    it("extends the outer columns by one tile and shifts them inward", () => {
+        assert.deepEqual(tankTrackColumns([]), []);
+        assert.deepEqual(tankTrackColumns([
+            { x: 2, y: 1, width: 1, height: 3 },
+            { x: 4, y: 0, width: 2, height: 2 },
+        ]), [
+            { x: 2.5, y: 0.5, length: 4 },
+            { x: 4.5, y: -0.5, length: 3 },
+        ]);
+        assert.deepEqual(tankTrackColumns([
+            { x: 0, y: 2, width: 1, height: 1 },
+        ]), [
+            { x: -0.25, y: 1.5, length: 2 },
+            { x: 0.25, y: 1.5, length: 2 },
+        ]);
+    });
+
+    it("cycles the tread once per tile of travel and holds still at a fixed distance", () => {
+        assert.equal(tankTrackSprite(0), "tiles/tiles_1x1_0009");
+        assert.equal(tankTrackSprite(1 / 3), "tiles/tiles_1x1_0010");
+        assert.equal(tankTrackSprite(2 / 3), "tiles/tiles_1x1_0011");
+        assert.equal(tankTrackSprite(1), "tiles/tiles_1x1_0009");
+        assert.equal(tankTrackSprite(4), tankTrackSprite(4));
     });
 });

@@ -2,7 +2,7 @@ import { ABILITY_BAR_WIDTH } from "../combat/constants";
 import { drawRect, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
-import { TILE_SIZE_PX, type BaseTile, type TileType } from "../building/types/tiles";
+import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type TileType } from "../building/types/tiles";
 
 /** Matches the combat ability bar so the two left sidebars line up. */
 export const SIDEBAR_WIDTH = ABILITY_BAR_WIDTH;
@@ -215,7 +215,7 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
         const iconX = entry.bounds.x + 12 + iconSize / 2;
         const iconY = entry.bounds.y + entry.bounds.height / 2;
         drawSprite({
-            sprite: entry.tile.tileSprite,
+            sprite: tileSpriteAt(entry.tile.tileSprite, 0, 0),
             x: iconX,
             y: iconY,
             scaleX: iconScale,
@@ -229,6 +229,8 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
                 y: iconY,
                 scaleX: iconScale,
                 scaleY: iconScale,
+                originX: entry.tile.turret.spriteCenterX,
+                originY: entry.tile.turret.spriteCenterY,
                 zIndex: 4,
             });
         }
