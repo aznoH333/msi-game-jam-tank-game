@@ -7,6 +7,8 @@ import { TILE_SIZE_PX, type BaseTile, type TileType } from "../building/types/ti
 /** Matches the combat ability bar so the two left sidebars line up. */
 export const SIDEBAR_WIDTH = ABILITY_BAR_WIDTH;
 export const SIDEBAR_CONTENT_TOP = 68;
+const WEAPON_SLOT_OFFER_HEIGHT = 64;
+const WEAPON_SLOT_OFFER_GAP = 8;
 
 export type EditorTab = TileType | "OVERCLOCK" | "ITEMS";
 
@@ -65,6 +67,9 @@ export function layoutSidebar(screenHeight: number, activeTab: EditorTab, tiles:
     const entryHeight = 64;
     const entryGap = 8;
     let entryY = SIDEBAR_CONTENT_TOP;
+    if (activeTab === "WEAPON") {
+        entryY += WEAPON_SLOT_OFFER_HEIGHT + WEAPON_SLOT_OFFER_GAP;
+    }
     const entries = tiles.map((tile) => {
         const bounds = {
             x: padding,
@@ -81,6 +86,54 @@ export function layoutSidebar(screenHeight: number, activeTab: EditorTab, tiles:
         tabs,
         entries,
     };
+}
+
+export function weaponSlotOfferBounds(): Bounds {
+    return {
+        x: 16,
+        y: SIDEBAR_CONTENT_TOP,
+        width: SIDEBAR_WIDTH - 32,
+        height: WEAPON_SLOT_OFFER_HEIGHT,
+    };
+}
+
+export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
+    const bounds = weaponSlotOfferBounds();
+    const priceText = String(Math.round(price)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    drawRect({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        color: "#262c3a",
+    });
+    drawText({
+        text: "Weapon slot",
+        x: bounds.x + 12,
+        y: bounds.y + 22,
+        font: "16px sans-serif",
+        color: enabled ? "#eceae4" : "#8b919c",
+        align: "left",
+        baseline: "middle",
+    });
+    drawText({
+        text: "One more gun",
+        x: bounds.x + 12,
+        y: bounds.y + 44,
+        font: "13px sans-serif",
+        color: "#a8a49a",
+        align: "left",
+        baseline: "middle",
+    });
+    drawText({
+        text: priceText,
+        x: bounds.x + bounds.width - 12,
+        y: bounds.y + bounds.height / 2,
+        font: "16px sans-serif",
+        color: enabled ? "#e6c07b" : "#6d7380",
+        align: "right",
+        baseline: "middle",
+    });
 }
 
 export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | null): void {

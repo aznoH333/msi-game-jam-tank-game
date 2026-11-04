@@ -28,8 +28,20 @@ export const REPAIR_HEAL_PER_SECOND = 0.025;
 /** How long a repair circle keeps healing, in seconds. */
 export const REPAIR_DURATION = 5;
 
-/** Share of max health a destroyed tile returns with when a repair circle finishes. */
+/** Repair heals and restores on this many simulation frames, using the time those frames covered. */
+export const REPAIR_TICK_FRAMES = 10;
+
+/** Share of max health a destroyed tile returns with on a repair tick. */
 export const REPAIR_REVIVE_RATIO = 0.1;
 
 /** Seconds before the same vehicle can repair again. */
 export const REPAIR_COOLDOWN = 15;
+
+/** A jammed shot spends this many times the gun's energy per shot and ends the salvo. */
+export const JAM_ENERGY_MULTIPLIER = 1.5;
+
+/** Tile radius of the blast a failed shot leaves on its own gun. */
+export const FAIL_EXPLOSION_RADIUS = 2.5;
+
+/** A failed shot's blast damage, as a share of that gun tile's max health. */
+export const FAIL_DAMAGE_OF_MAX_HEALTH = 0.25;

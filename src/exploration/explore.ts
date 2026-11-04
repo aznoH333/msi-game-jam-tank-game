@@ -1,3 +1,4 @@
+import { placedWeaponCount } from "../building/vehicleRules";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
@@ -116,7 +117,12 @@ export function updateExplore(): void {
         triangles: run.triangles,
         billboards: enemyBillboards(run.enemies),
     });
-    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
+    drawAbilityBarMoney(
+        state.playerData.money,
+        state.playerData.overclockModules,
+        placedWeaponCount(state.playerData.vehicle),
+        state.playerData.vehicleWeaponSlots,
+    );
     drawCombatHud(run, player.personHealth);
     if (player.personHealth <= 0) {
         openGameOver();

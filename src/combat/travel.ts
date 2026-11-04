@@ -1,3 +1,4 @@
+import { placedWeaponCount } from "../building/vehicleRules";
 import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
@@ -97,7 +98,12 @@ export function updateTravel(): void {
         getTotalPowerCapacity(vehicle.base),
         getPowerPerSecond(vehicle.base),
     );
-    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
+    drawAbilityBarMoney(
+        state.playerData.money,
+        state.playerData.overclockModules,
+        placedWeaponCount(state.playerData.vehicle),
+        state.playerData.vehicleWeaponSlots,
+    );
 
     const mouse = getMousePosition();
     const leftDown = isMouseButtonDown(0);

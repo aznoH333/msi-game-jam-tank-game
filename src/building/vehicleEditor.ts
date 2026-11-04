@@ -6,13 +6,13 @@ import { transitionToNextEvent } from "../gamedirector/gamedirector";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { buyOffer } from "./itemShop";
-import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
+import { drawBuildingSidebar, drawWeaponSlotOffer, layoutSidebar, SIDEBAR_WIDTH, weaponSlotOfferBounds, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
-import { brokenVehicleRules, type VehicleRuleFailure } from "./vehicleRules";
+import { brokenVehicleRules, buyWeaponSlot, canAddWeapon, nextWeaponSlotPrice, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
 import { TILE_SIZE_PX, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
@@ -282,7 +282,8 @@ export function updateVehicleEditor(state: GameState): void {
     const leftPressed = leftDown && !editorLeftWasDown;
     const goButton = goButtonBounds(paneWidth);
     const copyButton = copyButtonBounds(paneWidth);
-    if (leftPressed && brokenVehicleRules(state.playerData.vehicle).length === 0 && hits(goButton, mouse.x, mouse.y)) {
+    const weaponSlots = state.playerData.vehicleWeaponSlots;
+    if (leftPressed && brokenVehicleRules(state.playerData.vehicle, weaponSlots).length === 0 && hits(goButton, mouse.x, mouse.y)) {
         transitionToNextEvent();
     }
     const copyClicked = cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
@@ -363,6 +364,11 @@ export function updateVehicleEditor(state: GameState): void {
                 }
             }
         } else {
+            if (selectedTab === "WEAPON" && leftPressed && !overSidebar && hits(weaponSlotOfferBounds(), mouse.x, mouse.y)) {
+                buyWeaponSlot(state.playerData);
+                overSidebar = true;
+            }
+
             // choose a part to place
             if (!overSidebar) {
                 for (const entry of layout.entries) {
@@ -389,7 +395,8 @@ export function updateVehicleEditor(state: GameState): void {
                         && origin.y < placed.y + placed.base.height
                         && origin.y + tileToPlace.height > placed.y;
                 });
-                if (insideGrid && !blocked && state.playerData.money >= tileToPlace.price) {
+                const weaponAllowed = tileToPlace.type !== "WEAPON" || canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
+                if (insideGrid && !blocked && weaponAllowed && state.playerData.money >= tileToPlace.price) {
                     state.playerData.money -= tileToPlace.price;
                     state.playerData.vehicle.tiles.push({
                         base: { ...tileToPlace },
@@ -486,7 +493,8 @@ export function updateVehicleEditor(state: GameState): void {
                 break;
             }
         }
-        if (previewColor !== "#ff5c5c" && state.playerData.money < selectedTile.price) {
+        const slotsFull = selectedTile.type === "WEAPON" && !canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
+        if (previewColor !== "#ff5c5c" && (slotsFull || state.playerData.money < selectedTile.price)) {
             previewColor = "#ff5c5c";
         }
 
@@ -533,6 +541,10 @@ export function updateVehicleEditor(state: GameState): void {
 
     setDrawClip(null);
     drawBuildingSidebar(layout, selectedTile);
+    if (selectedTab === "WEAPON") {
+        const slotPrice = nextWeaponSlotPrice(state.playerData.vehicleWeaponSlots);
+        drawWeaponSlotOffer(slotPrice, state.playerData.money >= slotPrice);
+    }
     if (selectedTab === "ITEMS") {
         drawItemShop(state.playerData);
     }
@@ -544,9 +556,14 @@ export function updateVehicleEditor(state: GameState): void {
         selectedTile,
         selectedTab === "OVERCLOCK" ? selectedOverclockTile : undefined,
     );
-    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
+    drawAbilityBarMoney(
+        state.playerData.money,
+        state.playerData.overclockModules,
+        placedWeaponCount(state.playerData.vehicle),
+        state.playerData.vehicleWeaponSlots,
+    );
 
-    drawLaunchControl(goButtonBounds(paneWidth), brokenVehicleRules(state.playerData.vehicle));
+    drawLaunchControl(goButtonBounds(paneWidth), brokenVehicleRules(state.playerData.vehicle, state.playerData.vehicleWeaponSlots));
 
     if (!cheatEnabled) {
         return;

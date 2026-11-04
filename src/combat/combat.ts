@@ -1,4 +1,5 @@
 import { TILE_SIZE_PX } from "../building/types/tiles";
+import { placedWeaponCount } from "../building/vehicleRules";
 import { getOverclockedTurretStats } from "../building/vehicleUtils";
 import { drawCircle, drawRect, GAME_HEIGHT, getDrawClip, setDrawClip } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
@@ -368,7 +369,12 @@ export function updateCombat(): void {
     const enemyEnergy = energyBudget(enemy.instance);
     drawViewEnergy(playerView, player.instance.power, playerEnergy.capacity, playerEnergy.generation);
     drawViewEnergy(enemyView, enemy.instance.power, enemyEnergy.capacity, enemyEnergy.generation);
-    drawAbilityBarMoney(state.playerData.money, state.playerData.overclockModules);
+    drawAbilityBarMoney(
+        state.playerData.money,
+        state.playerData.overclockModules,
+        placedWeaponCount(state.playerData.vehicle),
+        state.playerData.vehicleWeaponSlots,
+    );
     const playerHealth = healthRatio(player.instance);
     const enemyHealth = healthRatio(enemy.instance);
     drawHealthBar(playerView.x + 24, playerView.y + 52, 240, playerHealth ?? 0);

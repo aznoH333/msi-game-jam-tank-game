@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { PlacedTile } from "../src/building/types/tiles";
 import type { BaseVehicle } from "../src/building/types/vehicle";
-import { REPAIR_DURATION } from "../src/combat/constants";
+import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, REPAIR_DURATION } from "../src/combat/constants";
 import { combatMatch } from "../src/combat/testHarness";
 
 function block(x: number, y: number, health: number): PlacedTile {
@@ -186,7 +186,7 @@ describe("combat loop", () => {
         assert.ok(outcome.player.repairCooldown > 0);
     });
 
-    it("brings a destroyed tile on the repairing tank back to 10% when the circle finishes", () => {
+    it("restores a destroyed tile on the first repair tick, then keeps healing it", () => {
         const match = combatMatch(
             vehicle("Player", [block(0, 0, 100), block(8, 0, 100)]),
             vehicle("Enemy", [gun(0, 0, 100, 10), battery(2, 0)]),
@@ -198,7 +198,57 @@ describe("combat loop", () => {
             .run(0.5 + REPAIR_DURATION);
 
         assert.equal(outcome.winner, null);
-        assert.equal(outcome.player.tiles[0].health, 10);
+        // Back to 10% on the first tick, then nine heals of 1.25 across the rest of the circle.
+        assert.ok(
+            Math.abs(outcome.player.tiles[0].health - 21.25) < 0.05,
+            `expected about 21.25, got ${outcome.player.tiles[0].health}`,
+        );
         assert.equal(outcome.player.tiles[1].health, 100);
     });
+
+    it("jams a shot, ends the salvo, and spends one and a half shots of energy", () => {
+        const playerGun = gun(0, 0, 40, 10);
+        playerGun.base.powerCapacity = 100;
+        playerGun.base.turret!.salvoCount = 3;
+        playerGun.overclocks = [chanceOverclock("jamChance")];
+        const match = combatMatch(
+            vehicle("Player", [playerGun]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const outcome = match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(0.05);
+
+        assert.equal(outcome.enemy.tiles[0].health, 100);
+        assert.equal(outcome.player.tiles[0].health, 200);
+        assert.ok(Math.abs(outcome.player.energy - (105 - 10 * JAM_ENERGY_MULTIPLIER)) < 0.001);
+    });
+
+    it("fails a shot, ends the salvo, and blasts the gun for a quarter of its health", () => {
+        const playerGun = gun(0, 0, 40, 10);
+        playerGun.base.powerCapacity = 100;
+        playerGun.base.turret!.salvoCount = 3;
+        playerGun.overclocks = [chanceOverclock("failChance")];
+        const match = combatMatch(
+            vehicle("Player", [playerGun]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const outcome = match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(0.05);
+
+        assert.equal(outcome.enemy.tiles[0].health, 100);
+        assert.equal(outcome.player.tiles[0].health, 200 - 200 * FAIL_DAMAGE_OF_MAX_HEALTH);
+        assert.ok(Math.abs(outcome.player.energy - (105 - 10)) < 0.001);
+    });
 });
+
+function chanceOverclock(kind: "jamChance" | "failChance"): PlacedTile["overclocks"][number] {
+    return {
+        base: {
+            name: kind,
+            baseValue: 0,
+            minValue: 0,
+            maxValue: 1,
+            stepSize: 1,
+            [kind]: 1,
+        },
+        value: 1,
+    };
+}

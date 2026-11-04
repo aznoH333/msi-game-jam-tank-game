@@ -4,7 +4,7 @@ import { TILE_SIZE_PX } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
-import { drawModuleReadout, drawMoneyReadout } from "../ui/moneyReadout";
+import { drawModuleReadout, drawMoneyReadout, drawWeaponSlotReadout } from "../ui/moneyReadout";
 
 export { ABILITY_BAR_WIDTH };
 
@@ -255,10 +255,11 @@ export function drawViewEnergy(
     drawEnergyReadout(view.x + view.width - 220, view.y + 16, 200, current, capacity, generation);
 }
 
-/** Money at the bottom of the left sidebar, with the module count stacked above it. */
-export function drawAbilityBarMoney(money: number, modules: number): void {
+/** Money at the bottom of the left sidebar, with modules and weapon slots stacked above it. */
+export function drawAbilityBarMoney(money: number, modules: number, weaponsPlaced: number, weaponSlots: number): void {
     const width = ABILITY_BAR_WIDTH - 32;
     const moneyY = GAME_HEIGHT - 72;
+    drawWeaponSlotReadout(16, moneyY - 64, width, weaponsPlaced, weaponSlots);
     drawModuleReadout(16, moneyY - 32, width, modules);
     drawMoneyReadout(16, moneyY, width, money);
 }

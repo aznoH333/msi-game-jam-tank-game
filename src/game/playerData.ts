@@ -10,6 +10,7 @@ export interface PlayerData {
     /** Unlocked weapon -> ammo. A missing weapon is locked. */
     weapons: Partial<Record<WeaponName, number>>;
     personHealth: number;
+    vehicleWeaponSlots: number;
 }
 
 /** Initializes empty player data "new game" */
@@ -20,11 +21,12 @@ export function initPlayerData(): PlayerData {
             tiles: []
         },
         money: 20_000,
-        overclockModules: 0,
+        overclockModules: 3,
         weapons: {
             "fists": 0, 
             "pistol": 50,
         },
         personHealth: PERSON_HEALTH_MAX,
+        vehicleWeaponSlots: 1,
     }
 }

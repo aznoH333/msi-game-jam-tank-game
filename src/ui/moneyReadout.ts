@@ -11,6 +11,11 @@ export function drawModuleReadout(x: number, y: number, width: number, modules: 
     drawCounter(x, y, width, 26, 13, 8, "Modules", String(Math.max(0, Math.round(modules))), "#8ecbff");
 }
 
+/** Placed vehicle weapons over the slots the player owns. */
+export function drawWeaponSlotReadout(x: number, y: number, width: number, placed: number, slots: number): void {
+    drawCounter(x, y, width, 26, 13, 8, "Weapons", `${Math.max(0, placed)}/${Math.max(0, slots)}`, "#f0a070");
+}
+
 function drawCounter(
     x: number,
     y: number,

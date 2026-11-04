@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buyOffer, shopOffers } from "../src/building/itemShop";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
-import { adjustOverclock, modulesInTile } from "../src/building/vehicleUtils";
-import { brokenVehicleRules } from "../src/building/vehicleRules";
+import { adjustOverclock, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
+import { brokenVehicleRules, buyWeaponSlot, nextWeaponSlotPrice } from "../src/building/vehicleRules";
 import { initPlayerData } from "../src/game/playerData";
 
 const NEEDS_GUN = "The vehicle needs a gun.";
 const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not allowed.";
+const TOO_MANY_WEAPONS = "Not enough weapon slots.";
 
 function part(x: number, y: number, width = 1, height = 1, gun = false): PlacedTile {
     return {
@@ -68,6 +69,12 @@ describe("vehicle launch rules", () => {
         ]), []);
     });
 
+    it("rejects more guns than the player has weapon slots", () => {
+        const guns = [part(0, 0, 2, 2, true), part(2, 0, 2, 2, true)];
+        assert.deepEqual(brokenVehicleRules({ name: "Tank", tiles: guns }, 1).map((failure) => failure.explanation), [TOO_MANY_WEAPONS]);
+        assert.deepEqual(brokenVehicleRules({ name: "Tank", tiles: guns }, 2), []);
+    });
+
     it("rejects a corner touch and any separate island", () => {
         assert.deepEqual(warnings([part(0, 0), part(1, 1)]), [NEEDS_GUN, MUST_CONNECT]);
         assert.deepEqual(warnings([
@@ -120,12 +127,51 @@ describe("overclock modules", () => {
         assert.equal(adjustOverclock(overclock(1), 1, 3), null);
     });
 
+    it("adds jam and fail chance on top of a base of zero", () => {
+        const turret = part(0, 0, 1, 1, true).base.turret;
+        assert.ok(turret);
+        const plain = getOverclockedTurretStats(turret, []);
+        assert.equal(plain.jamChance, 0);
+        assert.equal(plain.failChance, 0);
+
+        const tuned = getOverclockedTurretStats(turret, [{
+            base: {
+                name: "Risky",
+                baseValue: 0,
+                minValue: 0,
+                maxValue: 1,
+                stepSize: 0.25,
+                jamChance: 0.2,
+                failChance: 0.1,
+            },
+            value: 0.5,
+        }]);
+        assert.equal(tuned.jamChance, 0.1);
+        assert.equal(tuned.failChance, 0.05);
+    });
+
     it("counts the modules a sold gun should return", () => {
         const gun = part(0, 0, 1, 1, true);
         gun.overclocks = [overclock(0.5), overclock(-0.25)];
         assert.equal(modulesInTile(gun), 2);
         gun.overclocks = [overclock(0)];
         assert.equal(modulesInTile(gun), 0);
+    });
+});
+
+describe("weapon slots", () => {
+    it("charges 10,000 for the first extra slot and 10,000 more for each one after", () => {
+        assert.equal(nextWeaponSlotPrice(1), 10_000);
+        assert.equal(nextWeaponSlotPrice(2), 20_000);
+        assert.equal(nextWeaponSlotPrice(3), 30_000);
+
+        const player = initPlayerData();
+        player.money = 10_000;
+        assert.equal(buyWeaponSlot(player), true);
+        assert.equal(player.vehicleWeaponSlots, 2);
+        assert.equal(player.money, 0);
+        assert.equal(buyWeaponSlot(player), false);
+        assert.equal(player.vehicleWeaponSlots, 2);
     });
 });
 

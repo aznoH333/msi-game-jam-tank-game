@@ -6,7 +6,7 @@ import { SIDEBAR_CONTENT_TOP, SIDEBAR_WIDTH, type Bounds } from "./buildingSideb
 
 const PADDING = 16;
 const EFFECT_FIELDS: {
-    key: "damage" | "powerCost" | "salvo" | "salvoDelay" | "accuracy" | "reloadTime" | "explosionRadius";
+    key: "damage" | "powerCost" | "salvo" | "salvoDelay" | "accuracy" | "reloadTime" | "explosionRadius" | "jamChance" | "failChance";
     stat: keyof TurretCombatStats;
     label: string;
 }[] = [
@@ -17,10 +17,16 @@ const EFFECT_FIELDS: {
     { key: "accuracy", stat: "accuracy", label: "Accuracy" },
     { key: "reloadTime", stat: "reloadTime", label: "Reload time" },
     { key: "explosionRadius", stat: "explosionRadius", label: "Explosion radius" },
+    { key: "jamChance", stat: "jamChance", label: "Jam chance" },
+    { key: "failChance", stat: "failChance", label: "Fail chance" },
 ];
 
 const BUTTON_SIZE = 28;
 const BUTTON_GAP = 8;
+const EFFECT_ROW = 22;
+const CHANCE_ROW = 34;
+const CHANCE_FONT = "22px sans-serif";
+const CHANCE_COLOR = "#ff8c1a";
 
 export interface OverclockCard {
     index: number;
@@ -52,6 +58,11 @@ function formatStat(value: number): string {
     return String(Math.round(value * 1000) / 1000);
 }
 
+/** 0.03 displays as 3%. */
+function formatChance(chance: number): string {
+    return `${Math.round(chance * 1000) / 10}%`;
+}
+
 export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[] {
     if (!placed?.base.turret) {
         return [];
@@ -78,7 +89,7 @@ export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[]
         y += BUTTON_SIZE;
         for (const field of EFFECT_FIELDS) {
             if (slider[field.key] !== undefined) {
-                y += 22;
+                y += field.key === "jamChance" || field.key === "failChance" ? CHANCE_ROW : EFFECT_ROW;
             }
         }
         y += 16;
@@ -161,20 +172,29 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
             if (instance.base[field.key] === undefined) {
                 continue;
             }
-            const baseText = formatStat(turret[field.stat]);
-            const nextText = formatStat(adjusted[field.stat]);
-            const nextColor = nextText === baseText ? "#eceae4" : "#e6c07b";
+            const chance = field.stat === "jamChance" || field.stat === "failChance";
+            const valueFont = chance ? CHANCE_FONT : "14px sans-serif";
+            let baseText: string;
+            let nextText: string;
+            if (field.stat === "jamChance" || field.stat === "failChance") {
+                baseText = formatChance(0);
+                nextText = formatChance(adjusted[field.stat]);
+            } else {
+                baseText = formatStat(turret[field.stat]);
+                nextText = formatStat(adjusted[field.stat]);
+            }
+            const nextColor = chance ? CHANCE_COLOR : nextText === baseText ? "#eceae4" : "#e6c07b";
             const arrow = " -> ";
             const right = SIDEBAR_WIDTH - PADDING;
-            const nextX = right - measureText(nextText, "14px sans-serif");
-            const arrowX = nextX - measureText(arrow, "14px sans-serif");
-            const baseX = arrowX - measureText(baseText, "14px sans-serif");
+            const nextX = right - measureText(nextText, valueFont);
+            const arrowX = nextX - measureText(arrow, valueFont);
+            const baseX = arrowX - measureText(baseText, valueFont);
             drawText({
                 text: field.label,
                 x: PADDING,
                 y: effectY,
-                font: "14px sans-serif",
-                color: "#a8a49a",
+                font: chance ? CHANCE_FONT : "14px sans-serif",
+                color: chance ? CHANCE_COLOR : "#a8a49a",
                 align: "left",
                 baseline: "top",
             });
@@ -182,8 +202,8 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 text: baseText,
                 x: baseX,
                 y: effectY,
-                font: "14px sans-serif",
-                color: "#eceae4",
+                font: valueFont,
+                color: chance ? CHANCE_COLOR : "#eceae4",
                 align: "left",
                 baseline: "top",
             });
@@ -191,8 +211,8 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 text: arrow,
                 x: arrowX,
                 y: effectY,
-                font: "14px sans-serif",
-                color: "#a8a49a",
+                font: valueFont,
+                color: chance ? CHANCE_COLOR : "#a8a49a",
                 align: "left",
                 baseline: "top",
             });
@@ -200,12 +220,12 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 text: nextText,
                 x: nextX,
                 y: effectY,
-                font: "14px sans-serif",
+                font: valueFont,
                 color: nextColor,
                 align: "left",
                 baseline: "top",
             });
-            effectY += 22;
+            effectY += chance ? CHANCE_ROW : EFFECT_ROW;
         }
     }
 }

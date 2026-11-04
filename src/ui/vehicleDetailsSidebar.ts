@@ -27,13 +27,14 @@ function nameFieldBounds(): { x: number; y: number; width: number; height: numbe
     };
 }
 
-function drawInfoRow(x: number, y: number, label: string, value: string, changed = false): number {
+function drawInfoRow(x: number, y: number, label: string, value: string, changed = false, emphasis = false): number {
+    const font = emphasis ? "24px sans-serif" : "16px sans-serif";
     drawText({
         text: label,
         x,
         y,
-        font: "16px sans-serif",
-        color: changed ? "#e6c07b" : "#a8a49a",
+        font,
+        color: emphasis ? "#ff8c1a" : changed ? "#e6c07b" : "#a8a49a",
         align: "left",
         baseline: "top",
     });
@@ -41,12 +42,16 @@ function drawInfoRow(x: number, y: number, label: string, value: string, changed
         text: value,
         x: x + DETAILS_SIDEBAR_WIDTH - PADDING * 2,
         y,
-        font: "16px sans-serif",
-        color: changed ? "#e6c07b" : "#eceae4",
+        font,
+        color: emphasis ? "#ff8c1a" : changed ? "#e6c07b" : "#eceae4",
         align: "right",
         baseline: "top",
     });
-    return y + ROW_HEIGHT;
+    return y + (emphasis ? 36 : ROW_HEIGHT);
+}
+
+function formatChance(chance: number): string {
+    return `${Math.round(chance * 1000) / 10}%`;
 }
 
 function formatFinalStat(base: number, final: number): { text: string; changed: boolean } {
@@ -264,10 +269,8 @@ export function drawVehicleDetailsSidebar(
 
     // part stats; hide optional power and turret fields this part does not define
     rowY = previewY + previewSize + 48;
-    rowY = drawInfoRow(x + PADDING, rowY, "Description", "placeholder");
+    rowY = drawInfoRow(x + PADDING, rowY, "Health", String(shown.health));
     rowY = drawInfoRow(x + PADDING, rowY, "Price", String(shown.price));
-    rowY = drawInfoRow(x + PADDING, rowY, "Weight", "placeholder");
-    rowY = drawInfoRow(x + PADDING, rowY, "Power draw", "placeholder");
     if (shown.powerGenerationPerSecond !== undefined) {
         rowY = drawInfoRow(x + PADDING, rowY, "Power generation", String(shown.powerGenerationPerSecond));
     }
@@ -293,7 +296,13 @@ export function drawVehicleDetailsSidebar(
         rowY = drawInfoRow(x + PADDING, rowY, "Reload time", reload.text, reload.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Projectile speed", projectileSpeed.text, projectileSpeed.changed);
         rowY = drawInfoRow(x + PADDING, rowY, "Projectile type", turret.projectileType === "direct" ? "Direct" : "Mortar");
-        drawInfoRow(x + PADDING, rowY, "Explosion radius", explosionRadius.text, explosionRadius.changed);
+        rowY = drawInfoRow(x + PADDING, rowY, "Explosion radius", explosionRadius.text, explosionRadius.changed);
+        if (final.jamChance > 0) {
+            rowY = drawInfoRow(x + PADDING, rowY, "Jam chance", formatChance(final.jamChance), false, true);
+        }
+        if (final.failChance > 0) {
+            drawInfoRow(x + PADDING, rowY, "Fail chance", formatChance(final.failChance), false, true);
+        }
     } else if (shown.turret) {
         const turret = shown.turret;
         rowY = drawInfoRow(x + PADDING, rowY, "Damage", String(turret.damagePerShot));

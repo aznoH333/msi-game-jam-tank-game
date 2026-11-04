@@ -10,6 +10,10 @@ export interface TurretCombatStats {
     reloadTime: number;
     projectileSpeed: number;
     explosionRadius: number;
+    /** Chance a shot jams. Starts at 0. */
+    jamChance: number;
+    /** Chance a shot fails. Starts at 0. */
+    failChance: number;
 }
 
 /** Base turret stats plus every allocated overclock point. */
@@ -26,6 +30,8 @@ export function getOverclockedTurretStats(
         reloadTime: turret.reloadTime,
         projectileSpeed: turret.projectileSpeed,
         explosionRadius: turret.explosionRadius,
+        jamChance: 0,
+        failChance: 0,
     };
 
     for (const overclock of overclocks) {
@@ -51,6 +57,12 @@ export function getOverclockedTurretStats(
         }
         if (slider.explosionRadius !== undefined) {
             stats.explosionRadius += points * slider.explosionRadius * turret.explosionRadius;
+        }
+        if (slider.jamChance !== undefined) {
+            stats.jamChance += points * slider.jamChance;
+        }
+        if (slider.failChance !== undefined) {
+            stats.failChance += points * slider.failChance;
         }
     }
 

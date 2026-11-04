@@ -1,3 +1,4 @@
+import type { PlayerData } from "../game/playerData";
 import type { PlacedTile } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
@@ -7,12 +8,43 @@ export interface VehicleRuleFailure {
 
 const NEEDS_GUN = "The vehicle needs a gun.";
 const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not allowed.";
+const TOO_MANY_WEAPONS = "Not enough weapon slots.";
+
+/** First extra slot costs this much. Each slot already owned adds another step. */
+export const WEAPON_SLOT_PRICE_STEP = 10_000;
+
+export function placedWeaponCount(vehicle: BaseVehicle): number {
+    return vehicle.tiles.filter((tile) => tile.base.type === "WEAPON").length;
+}
+
+/** One slot is free. The next costs 10,000, then 20,000, then 30,000. */
+export function nextWeaponSlotPrice(slots: number): number {
+    return Math.max(1, slots) * WEAPON_SLOT_PRICE_STEP;
+}
+
+export function canAddWeapon(vehicle: BaseVehicle, slots: number): boolean {
+    return placedWeaponCount(vehicle) < slots;
+}
+
+/** Spend money for one more vehicle weapon slot. */
+export function buyWeaponSlot(player: PlayerData): boolean {
+    const price = nextWeaponSlotPrice(player.vehicleWeaponSlots);
+    if (player.money < price) {
+        return false;
+    }
+    player.money -= price;
+    player.vehicleWeaponSlots += 1;
+    return true;
+}
 
 /** Rules that block leaving the shop, in display order. */
-export function brokenVehicleRules(vehicle: BaseVehicle): VehicleRuleFailure[] {
+export function brokenVehicleRules(vehicle: BaseVehicle, weaponSlots = Number.POSITIVE_INFINITY): VehicleRuleFailure[] {
     const failures: VehicleRuleFailure[] = [];
     if (!vehicle.tiles.some((tile) => tile.base.turret !== undefined)) {
         failures.push({ explanation: NEEDS_GUN });
+    }
+    if (placedWeaponCount(vehicle) > weaponSlots) {
+        failures.push({ explanation: TOO_MANY_WEAPONS });
     }
     if (!tilesAreConnected(vehicle.tiles)) {
         failures.push({ explanation: MUST_CONNECT });

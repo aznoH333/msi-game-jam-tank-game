@@ -74,6 +74,8 @@ export interface WeaponOverclockSlider {
     accuracy?: number;
     reloadTime?: number;
     explosionRadius?: number;
+    jamChance?: number;
+    failChance?: number;
 }
 
 

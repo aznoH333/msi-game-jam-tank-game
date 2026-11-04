@@ -8,11 +8,15 @@ import {
     DEFEAT_HEALTH_RATIO,
     DIRECT_MISS_DISTANCE,
     EXPLOSION_DURATION,
+    FAIL_DAMAGE_OF_MAX_HEALTH,
+    FAIL_EXPLOSION_RADIUS,
+    JAM_ENERGY_MULTIPLIER,
     REPAIR_COOLDOWN,
     REPAIR_DURATION,
     REPAIR_HEAL_PER_SECOND,
     REPAIR_RADIUS,
     REPAIR_REVIVE_RATIO,
+    REPAIR_TICK_FRAMES,
     TANK_SEPARATION,
 } from "./constants";
 import {
@@ -68,6 +72,10 @@ export interface RepairCircle {
     y: number;
     age: number;
     owner: Combatant;
+    /** Frames since this circle last healed. */
+    framesSinceTick: number;
+    /** Seconds gathered since the last tick. Spent all at once so the rate matches a per-frame heal. */
+    pendingDt: number;
 }
 
 export interface Explosion {
@@ -338,7 +346,7 @@ function tileInsideCircle(
     return Math.hypot(x - closestX, y - closestY) <= radius;
 }
 
-/** Living tiles heal over time. Destroyed tiles come back when the circle ends. */
+/** Living tiles heal on each tick. Destroyed tiles are restored on those same ticks. */
 function updateRepairs(
     battle: Battle,
     dt: number,
@@ -348,9 +356,12 @@ function updateRepairs(
     const stillActive: RepairCircle[] = [];
     for (const circle of battle.repairs) {
         circle.age += dt;
+        circle.framesSinceTick += 1;
+        circle.pendingDt += dt;
         const finished = circle.age >= REPAIR_DURATION - 1e-6;
+        const tick = circle.framesSinceTick >= REPAIR_TICK_FRAMES || finished;
         const camera = circle.owner === battle.player ? playerCamera : enemyCamera;
-        if (camera) {
+        if (tick && camera) {
             for (const part of circle.owner.instance.tiles) {
                 if (!tileInsideCircle(camera, part, circle.x, circle.y, REPAIR_RADIUS)) {
                     continue;
@@ -359,12 +370,16 @@ function updateRepairs(
                 if (maxHealth <= 0) {
                     continue;
                 }
-                if (part.health > 0) {
-                    part.health = Math.min(maxHealth, part.health + maxHealth * REPAIR_HEAL_PER_SECOND * dt);
-                } else if (finished) {
+                if (part.health <= 0) {
                     part.health = maxHealth * REPAIR_REVIVE_RATIO;
+                } else {
+                    part.health = Math.min(maxHealth, part.health + maxHealth * REPAIR_HEAL_PER_SECOND * circle.pendingDt);
                 }
             }
+        }
+        if (tick) {
+            circle.framesSinceTick = 0;
+            circle.pendingDt = 0;
         }
         if (!finished) {
             stillActive.push(circle);
@@ -431,6 +446,32 @@ function updateCombatant(
                     runtime.shotsLeft = 0;
                     break;
                 }
+                const jammed = Math.random() < Math.max(0, stats.jamChance);
+                const failed = Math.random() < Math.max(0, stats.failChance);
+                if (jammed || failed) {
+                    const spent = jammed ? cost * JAM_ENERGY_MULTIPLIER : cost;
+                    combatant.instance.power = Math.max(0, combatant.instance.power - spent);
+                    runtime.shotsLeft = 0;
+                    runtime.cooldown = Math.max(0, stats.reloadTime);
+                    if (failed) {
+                        const origin = tileToWorld(
+                            ownCamera,
+                            gun.tile.x,
+                            gun.tile.y,
+                            gun.tile.base.width,
+                            gun.tile.base.height,
+                        );
+                        detonate(
+                            battle,
+                            origin.x,
+                            origin.y,
+                            FAIL_EXPLOSION_RADIUS,
+                            gun.tile.base.health * FAIL_DAMAGE_OF_MAX_HEALTH,
+                            battleTargets(battle),
+                        );
+                    }
+                    break;
+                }
                 combatant.instance.power -= cost;
                 const origin = tileToWorld(
                     ownCamera,
@@ -479,6 +520,18 @@ function updateCombatant(
             runtime.cooldown = Math.max(0, runtime.cooldown - dt);
         }
     }
+}
+
+function battleTargets(battle: Battle): { combatant: Combatant; camera: CombatCamera }[] {
+    const view = battleView(battle);
+    const targets: { combatant: Combatant; camera: CombatCamera }[] = [];
+    if (view.playerCamera) {
+        targets.push({ combatant: battle.player, camera: view.playerCamera });
+    }
+    if (view.enemyCamera) {
+        targets.push({ combatant: battle.enemy, camera: view.enemyCamera });
+    }
+    return targets;
 }
 
 /** First time a shot enters a living tile on a tank other than the one that fired it. */
@@ -653,7 +706,7 @@ function placeRepair(combatant: Combatant, battle: Battle, point: { x: number; y
     if (!point || combatant.repairCooldown > 0) {
         return;
     }
-    battle.repairs.push({ x: point.x, y: point.y, age: 0, owner: combatant });
+    battle.repairs.push({ x: point.x, y: point.y, age: 0, owner: combatant, framesSinceTick: 0, pendingDt: 0 });
     combatant.repairCooldown = REPAIR_COOLDOWN;
 }
 
