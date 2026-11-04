@@ -38,6 +38,19 @@ const ATTACK_RANGE_FILL = "rgba(214, 64, 52, 0.28)";
 const ATTACK_RANGE_STROKE = "rgba(255, 120, 108, 0.95)";
 const REPAIR_RANGE_FILL = "rgba(63, 190, 110, 0.28)";
 const REPAIR_RANGE_STROKE = "rgba(170, 235, 190, 0.95)";
+/** Screen pixels of shake for each tile of explosion radius. */
+const SHAKE_PIXELS_PER_TILE = 8;
+/** How fast the shake falls off. Larger fades sooner. */
+const SHAKE_DECAY = 10;
+
+interface ViewShake {
+    magnitude: number;
+    x: number;
+    y: number;
+}
+
+let playerViewShake: ViewShake = { magnitude: 0, x: 0, y: 0 };
+let enemyViewShake: ViewShake = { magnitude: 0, x: 0, y: 0 };
 const WEAPON_KEY_COUNT = 9;
 
 let encounterEvent = -1;
@@ -192,6 +205,8 @@ export function updateCombat(): void {
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
         targetingRepair = false;
+        playerViewShake = { magnitude: 0, x: 0, y: 0 };
+        enemyViewShake = { magnitude: 0, x: 0, y: 0 };
         lastUpdateMs = performance.now();
     }
     const fight = battle;
@@ -213,6 +228,8 @@ export function updateCombat(): void {
     const playerView = view.playerView;
     const playerCamera = view.playerCamera;
     const enemyCamera = view.enemyCamera;
+    applyShake(playerCamera, playerViewShake);
+    applyShake(enemyCamera, enemyViewShake);
     const viewWidth = enemyView.width;
 
     const guns = gunsOf(player.instance);
@@ -291,12 +308,17 @@ export function updateCombat(): void {
         repair: repairAt,
     };
     stepBattle(fight, dt, { player: playerOrders, enemy: null, enemyAi: !fightOver });
+    shakeFromExplosions(fight.explosions, dt, playerCamera, enemyCamera);
+    applyShake(playerCamera, playerViewShake);
+    applyShake(enemyCamera, enemyViewShake);
+    const aimWorld = enemyCamera && mouseOverEnemy ? screenToWorld(enemyCamera, mouse.x, mouse.y) : null;
+    const aimPlayerWorld = playerCamera && mouseOverPlayer ? screenToWorld(playerCamera, mouse.x, mouse.y) : null;
     if (fight.result === "victory" && !moneyAwarded) {
         state.playerData.money += fight.moneyDropped;
         moneyAwarded = true;
     }
 
-    const turretRotations = turretAimRotations(player, playerCamera, mouseWorld);
+    const turretRotations = turretAimRotations(player, playerCamera, aimWorld);
     const enemyRotations = turretAimRotations(enemy, enemyCamera, null);
     for (const shot of fight.projectiles) {
         const progress = shot.duration <= 0 ? 1 : Math.min(1, shot.age / shot.duration);
@@ -312,25 +334,25 @@ export function updateCombat(): void {
         }
     }
 
-    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemyRotations);
-    drawCombatVehicle(player.instance, playerView, player.instance.base.name, false, turretRotations);
-    if (!fightOver && !targetingRepair && mouseWorld && enemyCamera) {
+    drawCombatVehicle(enemy.instance, enemyView, "Enemy", true, enemyRotations, enemyViewShake.x, enemyViewShake.y);
+    drawCombatVehicle(player.instance, playerView, player.instance.base.name, false, turretRotations, playerViewShake.x, playerViewShake.y);
+    if (!fightOver && !targetingRepair && aimWorld && enemyCamera) {
         const gun = guns[player.selectedAbility];
         const turret = gun?.tile.base.turret;
         if (gun && turret && gun.health > 0) {
             const stats = getOverclockedTurretStats(turret, gun.tile.overclocks);
             drawRangeCircle(
                 enemyCamera,
-                mouseWorld.x,
-                mouseWorld.y,
+                aimWorld.x,
+                aimWorld.y,
                 Math.max(0, stats.accuracy),
                 ATTACK_RANGE_FILL,
                 ATTACK_RANGE_STROKE,
             );
         }
     }
-    if (!fightOver && targetingRepair && playerWorld && playerCamera) {
-        drawRangeCircle(playerCamera, playerWorld.x, playerWorld.y, REPAIR_RADIUS, REPAIR_RANGE_FILL, REPAIR_RANGE_STROKE);
+    if (!fightOver && targetingRepair && aimPlayerWorld && playerCamera) {
+        drawRangeCircle(playerCamera, aimPlayerWorld.x, aimPlayerWorld.y, REPAIR_RADIUS, REPAIR_RANGE_FILL, REPAIR_RANGE_STROKE);
     }
     if (playerCamera) {
         for (const circle of fight.repairs) {
@@ -437,6 +459,73 @@ export function updateCombat(): void {
     ) {
         transitionToNextEvent();
     }
+}
+
+function applyShake(camera: CombatCamera | null, shake: ViewShake): void {
+    if (!camera) {
+        return;
+    }
+    camera.shakeX = shake.x;
+    camera.shakeY = shake.y;
+}
+
+function decayShake(shake: ViewShake, dt: number): void {
+    shake.magnitude *= Math.exp(-SHAKE_DECAY * dt);
+    if (shake.magnitude < 0.5) {
+        shake.magnitude = 0;
+        shake.x = 0;
+        shake.y = 0;
+    }
+}
+
+function kickShake(shake: ViewShake, explosionRadius: number): void {
+    const amount = Math.max(0, explosionRadius) * SHAKE_PIXELS_PER_TILE;
+    if (amount > shake.magnitude) {
+        shake.magnitude = amount;
+    }
+}
+
+/** A new blast shakes the tank view it landed on. The offset scales with the radius. */
+function shakeFromExplosions(
+    explosions: readonly Explosion[],
+    dt: number,
+    playerCamera: CombatCamera | null,
+    enemyCamera: CombatCamera | null,
+): void {
+    decayShake(playerViewShake, dt);
+    decayShake(enemyViewShake, dt);
+    for (const explosion of explosions) {
+        if (explosion.age > dt + 1e-4) {
+            continue;
+        }
+        const playerDistance = cameraDistance(playerCamera, explosion);
+        const enemyDistance = cameraDistance(enemyCamera, explosion);
+        if (playerDistance <= enemyDistance) {
+            kickShake(playerViewShake, explosion.radius);
+        } else {
+            kickShake(enemyViewShake, explosion.radius);
+        }
+    }
+    if (playerViewShake.magnitude > 0) {
+        sampleShake(playerViewShake);
+    }
+    if (enemyViewShake.magnitude > 0) {
+        sampleShake(enemyViewShake);
+    }
+}
+
+function cameraDistance(camera: CombatCamera | null, explosion: Explosion): number {
+    if (!camera) {
+        return Number.POSITIVE_INFINITY;
+    }
+    return Math.hypot(explosion.x - camera.worldX, explosion.y - camera.worldY);
+}
+
+function sampleShake(shake: ViewShake): void {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * shake.magnitude;
+    shake.x = Math.cos(angle) * radius;
+    shake.y = Math.sin(angle) * radius;
 }
 
 function resultPanelBounds(viewWidth: number): { x: number; y: number; width: number; height: number } {

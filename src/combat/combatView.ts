@@ -32,6 +32,8 @@ export function drawCombatVehicle(
     title: string,
     inverted: boolean,
     turretRotations: readonly number[],
+    shakeX = 0,
+    shakeY = 0,
 ): void {
     setDrawClip(null);
     drawRect({
@@ -66,10 +68,11 @@ export function drawCombatVehicle(
     }
 
     const footprintCenterY = layout.originY + (layout.minY + layout.maxY) / 2 * layout.cell;
+    setDrawClip({ x: view.x, y: view.y, width: view.width, height: view.height });
     instance.tiles.forEach((part, index) => {
         const tile = part.tile;
         if (part.health <= 0) {
-            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
+            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted, shakeX, shakeY);
             return;
         }
         const maxHealth = tile.base.health;
@@ -80,9 +83,9 @@ export function drawCombatVehicle(
         const damageTint = shade >= 1 ? undefined : `rgb(${channel}, ${channel}, ${channel})`;
         const width = tile.base.width * layout.cell;
         const height = tile.base.height * layout.cell;
-        const left = layout.originX + tile.x * layout.cell;
+        const left = layout.originX + tile.x * layout.cell + shakeX;
         const top = layout.originY + tile.y * layout.cell;
-        const drawTop = inverted ? footprintCenterY * 2 - (top + height) : top;
+        const drawTop = (inverted ? footprintCenterY * 2 - (top + height) : top) + shakeY;
         drawRect({
             x: left,
             y: drawTop,
@@ -99,6 +102,8 @@ export function drawCombatVehicle(
         });
         const scale = layout.cell / TILE_SIZE_PX;
         const center = combatTileCenter(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
+        center.x += shakeX;
+        center.y += shakeY;
         drawSprite({
             sprite: tile.base.tileSprite,
             x: center.x,
@@ -121,6 +126,7 @@ export function drawCombatVehicle(
             });
         }
     });
+    setDrawClip(null);
 }
 
 /** The wreck sprite is one cell. Stamp it across every cell of a larger part. */
@@ -131,11 +137,15 @@ function drawDestroyedTile(
     width: number,
     height: number,
     inverted: boolean,
+    shakeX: number,
+    shakeY: number,
 ): void {
     const scale = layout.cell / TILE_SIZE_PX;
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const center = combatTileCenter(layout, tileX + x, tileY + y, 1, 1, inverted);
+            center.x += shakeX;
+            center.y += shakeY;
             drawSprite({
                 sprite: DESTROYED_TILE_SPRITE,
                 x: center.x,

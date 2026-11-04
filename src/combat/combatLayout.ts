@@ -60,6 +60,9 @@ export interface CombatCamera {
     /** World position of this tank's footprint center, in tiles. */
     worldX: number;
     worldY: number;
+    /** Pixel offset applied to this view while it is shaking. */
+    shakeX: number;
+    shakeY: number;
 }
 
 export function makeCombatCamera(
@@ -69,7 +72,7 @@ export function makeCombatCamera(
     worldX: number,
     worldY: number,
 ): CombatCamera {
-    return { layout, view, inverted, worldX, worldY };
+    return { layout, view, inverted, worldX, worldY, shakeX: 0, shakeY: 0 };
 }
 
 function footprintCenter(layout: CombatVehicleLayout): { x: number; y: number } {
@@ -111,17 +114,19 @@ export function worldToScreen(camera: CombatCamera, worldX: number, worldY: numb
     const rawX = camera.layout.originX + localX * camera.layout.cell;
     const rawY = camera.layout.originY + localY * camera.layout.cell;
     if (!camera.inverted) {
-        return { x: rawX, y: rawY };
+        return { x: rawX + camera.shakeX, y: rawY + camera.shakeY };
     }
     const footprintCenterY = camera.layout.originY + center.y * camera.layout.cell;
-    return { x: rawX, y: footprintCenterY * 2 - rawY };
+    return { x: rawX + camera.shakeX, y: footprintCenterY * 2 - rawY + camera.shakeY };
 }
 
 export function screenToWorld(camera: CombatCamera, screenX: number, screenY: number): { x: number; y: number } {
     const center = footprintCenter(camera.layout);
     const footprintCenterY = camera.layout.originY + center.y * camera.layout.cell;
-    const rawY = camera.inverted ? footprintCenterY * 2 - screenY : screenY;
-    const localX = (screenX - camera.layout.originX) / camera.layout.cell;
+    const unshakenX = screenX - camera.shakeX;
+    const unshakenY = screenY - camera.shakeY;
+    const rawY = camera.inverted ? footprintCenterY * 2 - unshakenY : unshakenY;
+    const localX = (unshakenX - camera.layout.originX) / camera.layout.cell;
     const localY = (rawY - camera.layout.originY) / camera.layout.cell;
     const dx = localX - center.x;
     const dy = localY - center.y;

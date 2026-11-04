@@ -167,7 +167,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 damagePerShot: 100,
                 powerPerShot: 100,
                 salvoCount: 1,
-                salvoDelay: 0.1,
+                salvoDelay: 0.5,
                 reloadTime: 8.5,
                 explosionRadius: 4.5,
                 projectileSpeed: 85,
@@ -191,7 +191,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         maxValue: 1,
                         stepSize: 1,
                         damage: -0.6,
-                        explosionRadius: 3,
+                        explosionRadius: 1,
                         failChance: 0.3,
                     }
                 ]
