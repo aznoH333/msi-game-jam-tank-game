@@ -1,5 +1,5 @@
 import { loadSounds } from "./audio/audio";
-import { clearCanvas, fitCanvasToView, initCanvas, renderCircles, renderOverlayRects, renderRects } from "./drawing/canvas";
+import { clearCanvas, fitCanvasToView, initCanvas, renderCircles, renderOverlayRects, renderRects, renderScreenFade } from "./drawing/canvas";
 import { render3D } from "./drawing/3d";
 import { loadSprites, renderForegroundSprites, renderSprites } from "./drawing/sprites";
 import { renderText } from "./drawing/text";
@@ -20,6 +20,7 @@ function loop(): void {
     renderCircles();
     renderForegroundSprites();
     renderText();
+    renderScreenFade();
     requestAnimationFrame(loop);
 }
 

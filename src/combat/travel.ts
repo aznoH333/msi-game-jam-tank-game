@@ -26,10 +26,12 @@ const BILLBOARD_Z = 120;
 const STOP_AHEAD = 10;
 const EVENT_WIDTH = 6;
 const EVENT_HEIGHT = 4.6;
-const EVENT_CENTER_Y = 3.4;
+const EVENT_CENTER_Y = 2.3;
+const SHOP_EVENT_SPRITE = "world/events/overworld_shop";
+const COMBAT_EVENT_SPRITE = "world/events/overworld_tank_0001";
 const EVENT_SPRITE = "world/events/debug_event";
-const SKY_TOP = "#5c68e0";
-const SKY_BOTTOM = "#b9bffb";
+const SKY_TOP = "#b4202a";
+const SKY_BOTTOM = "#ffd541";
 const ROAD_SPRITE = "world/textures/road";
 const ROAD_TEX_WIDTH = 200;
 const ROAD_TEX_HEIGHT = 63;
@@ -83,7 +85,7 @@ export function updateTravel(): void {
             fov: Math.PI / 3,
         },
         triangles: streetTriangles(cameraZ),
-        billboards: [eventBillboard(cameraZ)],
+        billboards: [eventBillboard(cameraZ, nextEvent)],
     });
     drawText({
         text: "Travel",
@@ -277,12 +279,22 @@ function driveDistance(elapsed: number, distance: number): number {
     return distance - rampDistance + peak * decelTime * (1 - decelTime / (2 * RAMP_TIME));
 }
 
-function eventBillboard(cameraZ: number): Billboard3D {
+function eventSprite(next: EventType): string {
+    if (next === "SHOP") {
+        return SHOP_EVENT_SPRITE;
+    }
+    if (next === "COMBAT") {
+        return COMBAT_EVENT_SPRITE;
+    }
+    return EVENT_SPRITE;
+}
+
+function eventBillboard(cameraZ: number, next: EventType): Billboard3D {
     return {
         position: bend({ x: 0, y: EVENT_CENTER_Y, z: BILLBOARD_Z }, cameraZ),
         width: EVENT_WIDTH,
         height: EVENT_HEIGHT,
-        sprite: EVENT_SPRITE,
+        sprite: eventSprite(next),
     };
 }
 

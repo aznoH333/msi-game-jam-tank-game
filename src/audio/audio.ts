@@ -112,6 +112,103 @@ function stopLoop(voice: LoopVoice | null): void {
     voice.gain.disconnect();
 }
 
+/** Seconds a track takes to fade in, and the previous track takes to fade out. */
+const MUSIC_FADE_SECONDS = 1;
+
+interface MusicVoice {
+    name: string;
+    source: AudioBufferSourceNode;
+    gain: GainNode;
+    from: number;
+    to: number;
+    fadeStart: number;
+    fadeEnd: number;
+}
+
+let musicVoices: MusicVoice[] = [];
+
+/** Loop a music track, or silence when name is null. A new track fades in as the old one fades out. */
+export function setMusic(name: string | null): void {
+    const ctx = audioContext();
+    if (ctx.state === "suspended") {
+        void ctx.resume();
+    }
+    const now = ctx.currentTime;
+    reapMusic(now);
+    if (name !== null && !musicVoices.some((voice) => voice.name === name)) {
+        startMusic(name, now);
+    }
+    for (const voice of musicVoices) {
+        fadeMusic(voice, voice.name === name ? 1 : 0, now);
+    }
+}
+
+function startMusic(name: string, now: number): void {
+    const buffer = loadedSounds.get(name);
+    if (!buffer) {
+        if (!missingSounds.has(name)) {
+            missingSounds.add(name);
+            console.warn(`Missing sound: ${name}`);
+        }
+        return;
+    }
+    const ctx = audioContext();
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(ctx.destination);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(gain);
+    source.start();
+    musicVoices.push({
+        name,
+        source,
+        gain,
+        from: 0,
+        to: 0,
+        fadeStart: now,
+        fadeEnd: now,
+    });
+}
+
+function fadeMusic(voice: MusicVoice, to: number, now: number): void {
+    if (voice.to === to) {
+        return;
+    }
+    const from = musicGainAt(voice, now);
+    voice.from = from;
+    voice.to = to;
+    voice.fadeStart = now;
+    voice.fadeEnd = now + MUSIC_FADE_SECONDS;
+    const param = voice.gain.gain;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(from, now);
+    param.linearRampToValueAtTime(to, voice.fadeEnd);
+}
+
+function musicGainAt(voice: MusicVoice, now: number): number {
+    if (voice.fadeEnd <= voice.fadeStart) {
+        return voice.to;
+    }
+    const t = Math.min(1, Math.max(0, (now - voice.fadeStart) / (voice.fadeEnd - voice.fadeStart)));
+    return voice.from + (voice.to - voice.from) * t;
+}
+
+function reapMusic(now: number): void {
+    const stillPlaying: MusicVoice[] = [];
+    for (const voice of musicVoices) {
+        if (voice.to === 0 && now >= voice.fadeEnd) {
+            voice.source.stop();
+            voice.source.disconnect();
+            voice.gain.disconnect();
+            continue;
+        }
+        stillPlaying.push(voice);
+    }
+    musicVoices = stillPlaying;
+}
+
 /** Play a loaded sound. Overlapping calls each get their own voice. */
 export function playSound(name: string): void {
     const buffer = loadedSounds.get(name);

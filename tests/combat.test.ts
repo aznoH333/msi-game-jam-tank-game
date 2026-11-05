@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { PlacedTile } from "../src/building/types/tiles";
 import type { BaseVehicle } from "../src/building/types/vehicle";
-import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, REPAIR_DURATION } from "../src/combat/constants";
+import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, OPENING_FIRE_DELAY, REPAIR_DURATION } from "../src/combat/constants";
 import { FAULT_ICON_DURATION, iconFlashAlpha } from "../src/combat/statusIcons";
 import { combatMatch } from "../src/combat/testHarness";
 
@@ -94,7 +94,10 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100)]),
         );
         const aim = match.tile("enemy", 0);
-        const outcome = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(1);
+        const held = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(OPENING_FIRE_DELAY);
+        assert.equal(held.enemy.tiles[0].health, 100);
+
+        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1);
 
         assert.equal(outcome.winner, null);
         assert.equal(outcome.enemy.tiles[0].health, 70);
@@ -108,7 +111,7 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100)]),
         );
         const aim = match.tile("enemy", 0);
-        const outcome = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(1);
+        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1 + OPENING_FIRE_DELAY);
 
         assert.equal(outcome.winner, "player");
         assert.equal(outcome.enemy.healthRatio, 0);
@@ -125,7 +128,7 @@ describe("combat loop", () => {
         );
         const enemyTile = win.tile("enemy", 0);
         assert.equal(win.state().moneyDropped, 0);
-        const won = win.at(0, "player", { fire: { gun: 0, at: enemyTile } }).run(2);
+        const won = win.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: enemyTile } }).run(2 + OPENING_FIRE_DELAY);
 
         assert.equal(won.winner, "player");
         assert.equal(won.moneyDropped, bounty);
@@ -137,7 +140,7 @@ describe("combat loop", () => {
             bounty,
         );
         const playerTile = loss.tile("player", 0);
-        const lost = loss.at(0, "enemy", { fire: { gun: 0, at: playerTile } }).run(2);
+        const lost = loss.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: playerTile } }).run(2 + OPENING_FIRE_DELAY);
 
         assert.equal(lost.winner, "enemy");
         assert.equal(lost.moneyDropped, 0);
@@ -149,7 +152,7 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100)]),
         );
         const aim = match.tile("enemy", 0);
-        const outcome = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(1);
+        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1 + OPENING_FIRE_DELAY);
 
         assert.equal(outcome.enemy.tiles[0].health, 100);
         assert.equal(outcome.winner, null);
@@ -166,7 +169,7 @@ describe("combat loop", () => {
         );
         const aim = match.tile("enemy", 0);
         const outcome = match
-            .at(0, "player", { fire: { gun: 0, at: aim } })
+            .at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } })
             .at(1.5, "player", { fire: { gun: 0, at: aim } })
             .run(1.5);
 
@@ -179,7 +182,7 @@ describe("combat loop", () => {
             vehicle("Enemy", [gun(0, 0, 25, 10), battery(2, 0)]),
         );
         const aim = match.tile("player", 0);
-        const outcome = match.at(0, "enemy", { fire: { gun: 0, at: aim } }).run(1);
+        const outcome = match.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: aim } }).run(1 + OPENING_FIRE_DELAY);
 
         assert.equal(outcome.player.tiles[0].health, 75);
         assert.equal(outcome.enemy.healthRatio, 1);
@@ -193,9 +196,9 @@ describe("combat loop", () => {
         );
         const wounded = match.tile("player", 0);
         const outcome = match
-            .at(0, "enemy", { fire: { gun: 0, at: wounded } })
-            .at(0.5, "player", { repair: { at: wounded } })
-            .run(0.5 + REPAIR_DURATION);
+            .at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: wounded } })
+            .at(OPENING_FIRE_DELAY + 0.5, "player", { repair: { at: wounded } })
+            .run(OPENING_FIRE_DELAY + 0.5 + REPAIR_DURATION);
 
         assert.equal(outcome.winner, null);
         // 40 damage, then five heals of 5 across the five-second circle.
@@ -213,9 +216,9 @@ describe("combat loop", () => {
         );
         const destroyed = match.tile("player", 0);
         const outcome = match
-            .at(0, "enemy", { fire: { gun: 0, at: destroyed } })
-            .at(0.5, "player", { repair: { at: destroyed } })
-            .run(0.5 + REPAIR_DURATION);
+            .at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: destroyed } })
+            .at(OPENING_FIRE_DELAY + 0.5, "player", { repair: { at: destroyed } })
+            .run(OPENING_FIRE_DELAY + 0.5 + REPAIR_DURATION);
 
         assert.equal(outcome.winner, null);
         // Back to 10% on the first tick, then four heals of 5 across the rest of the circle.
@@ -235,7 +238,7 @@ describe("combat loop", () => {
             vehicle("Player", [playerGun]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        const outcome = match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(0.05);
+        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
 
         assert.equal(outcome.enemy.tiles[0].health, 100);
         assert.equal(outcome.player.tiles[0].health, 200);
@@ -251,7 +254,7 @@ describe("combat loop", () => {
             vehicle("Player", [playerGun]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        const outcome = match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(0.05);
+        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
 
         assert.equal(outcome.enemy.tiles[0].health, 100);
         assert.equal(outcome.player.tiles[0].health, 200 - 200 * FAIL_DAMAGE_OF_MAX_HEALTH);
@@ -264,7 +267,7 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100)]),
         );
         const lightAim = light.tile("enemy", 0);
-        const lightHit = light.at(0, "player", { fire: { gun: 0, at: lightAim } }).run(0.25);
+        const lightHit = light.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: lightAim } }).run(OPENING_FIRE_DELAY + 0.25);
         assert.ok(lightHit.sparks.length > 0);
         for (const spark of lightHit.sparks) {
             assert.ok(Math.hypot(spark.x - lightAim.x, spark.y - lightAim.y) > 0.3);
@@ -275,7 +278,7 @@ describe("combat loop", () => {
             vehicle("Player", [gun(0, 0, 60, 10), battery(2, 0)]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        const heavyHit = heavy.at(0, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(0.25);
+        const heavyHit = heavy.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.25);
         assert.ok(heavyHit.sparks.length > lightHit.sparks.length);
     });
 
@@ -291,7 +294,7 @@ describe("combat loop", () => {
             vehicle("Player", [playerGun, battery(2, 0)]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } });
+        match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } });
         let fired = false;
         for (let step = 0; step < 40; step++) {
             const state = match.run(0.05, 0.05);
@@ -321,8 +324,8 @@ describe("combat loop", () => {
             vehicle("Player", [jammedGun]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        jammed.at(0, "player", { fire: { gun: 0, at: jammed.tile("enemy", 0) } });
-        const jam = jammed.run(0.05);
+        jammed.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: jammed.tile("enemy", 0) } });
+        const jam = jammed.run(OPENING_FIRE_DELAY + 0.05);
         assert.equal(jam.player.tiles[0].fault, "jam");
         assert.equal(jam.player.tiles[0].faultAge, 0);
         assert.ok(jam.sounds.includes("weapons/weapon_jam"));
@@ -339,7 +342,7 @@ describe("combat loop", () => {
             vehicle("Player", [failedGun]),
             vehicle("Enemy", [block(0, 0, 100)]),
         );
-        const fail = failed.at(0, "player", { fire: { gun: 0, at: failed.tile("enemy", 0) } }).run(0.05);
+        const fail = failed.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: failed.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
         assert.equal(fail.player.tiles[0].fault, "fail");
         assert.ok(fail.sounds.includes("weapons/weapon_jam"));
         assert.ok(fail.sounds.includes("weapons/explosion_small"));
@@ -351,8 +354,8 @@ describe("combat loop", () => {
             vehicle("Enemy", [gun(0, 0, 40, 10), battery(2, 0)]),
         );
         const wounded = match.tile("player", 0);
-        match.at(0, "enemy", { fire: { gun: 0, at: wounded } }).at(0.5, "player", { repair: { at: wounded } });
-        match.run(0.5);
+        match.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: wounded } }).at(OPENING_FIRE_DELAY + 0.5, "player", { repair: { at: wounded } });
+        match.run(OPENING_FIRE_DELAY + 0.5);
         const healed = match.run(1);
         assert.equal(healed.player.tiles[0].healFlash, 1);
         assert.ok(healed.player.tiles[0].health > 60);
@@ -368,7 +371,8 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100)]),
         );
         const aim = match.tile("enemy", 0);
-        match.at(0, "player", { fire: { gun: 0, at: aim } });
+        match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } });
+        match.run(OPENING_FIRE_DELAY);
         let hit = false;
         for (let step = 0; step < 40; step++) {
             const state = match.run(0.01, 0.01);

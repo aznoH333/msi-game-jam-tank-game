@@ -1,4 +1,5 @@
-import { getGameState, switchGameState } from "../game/gameState";
+import { getGameState } from "../game/gameState";
+import { requestTransition } from "../game/screenTransition";
 import { markShopCheckpoint, rewindToCheckpoint } from "./checkpoint";
 
 /**
@@ -50,28 +51,33 @@ export function rememberShopCheckpoint(): void {
 
 /** Death in a fight or a maze. Full heal, then the last shop. */
 export function restoreCheckpoint(): void {
-    beginAttempt();
-    const state = getGameState();
-    rewindToCheckpoint(state.gameDirector, state.playerData, getEventTypeForIndex);
-    switchGameState(screenForEvent(state.gameDirector.currentEventType));
+    requestTransition(() => {
+        beginAttempt();
+        const state = getGameState();
+        rewindToCheckpoint(state.gameDirector, state.playerData, getEventTypeForIndex);
+        state.currentScreen = screenForEvent(state.gameDirector.currentEventType);
+    });
 }
 
 export function transitionToNextEvent() {
-    const director = getGameState().gameDirector;
-
-    director.eventIndex++;
-    const nextEventType = getEventTypeForIndex(director.eventIndex);
-    director.currentEventType = nextEventType;
-
-    switchGameState(screenForEvent(nextEventType));
+    requestTransition(() => {
+        const state = getGameState();
+        const director = state.gameDirector;
+        director.eventIndex++;
+        director.currentEventType = getEventTypeForIndex(director.eventIndex);
+        state.currentScreen = screenForEvent(director.currentEventType);
+    });
 }
 
 /** The travel stop offers this when the next event is an exploration. */
 export function chooseExploration(choice: "explore" | "skip"): void {
-    const director = getGameState().gameDirector;
-    director.eventIndex += choice === "explore" ? 1 : 2;
-    director.currentEventType = getEventTypeForIndex(director.eventIndex);
-    switchGameState(screenForEvent(director.currentEventType));
+    requestTransition(() => {
+        const state = getGameState();
+        const director = state.gameDirector;
+        director.eventIndex += choice === "explore" ? 1 : 2;
+        director.currentEventType = getEventTypeForIndex(director.eventIndex);
+        state.currentScreen = screenForEvent(director.currentEventType);
+    });
 }
 
 function screenForEvent(eventType: EventType): "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" {

@@ -13,6 +13,9 @@ export const EXPLOSION_DURATION = 0.2;
 /** Tiles a direct shot keeps flying past its aim point before a miss is deleted. */
 export const DIRECT_MISS_DISTANCE = 12;
 
+/** Seconds after a fight starts before either tank can fire. */
+export const OPENING_FIRE_DELAY = 1;
+
 /** A vehicle loses the fight when its remaining hit points fall under this share. */
 export const DEFEAT_HEALTH_RATIO = 0.2;
 

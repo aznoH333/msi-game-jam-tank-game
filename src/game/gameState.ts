@@ -1,3 +1,5 @@
+import { setMusic } from "../audio/audio";
+import { setScreenFade } from "../drawing/canvas";
 import { beginAttempt, GameDirector, initGameDirector } from "../gamedirector/gamedirector";
 import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
@@ -5,6 +7,7 @@ import { explorationScreenUpdate } from "./explorationScreen";
 import { gameOverUpdate } from "./gameOver";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
+import { requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
 
 
 export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
@@ -42,6 +45,8 @@ export function getGameState(): GameState {
 
 
 export function updateGame(state: GameState) {
+    updateScreenTransition();
+    setMusic(musicFor(state));
     switch (state.currentScreen) {
         
         case "MAIN_MENU":
@@ -64,18 +69,35 @@ export function updateGame(state: GameState) {
             gameOverUpdate();
             break;
     }
+    setScreenFade(screenFadeAlpha());
+}
+
+function musicFor(state: GameState): string | null {
+    if (state.currentScreen === "BUILDING_SCREEN") {
+        return "music/building_music";
+    }
+    if (state.currentScreen === "COMBAT_SCREEN" && state.gameDirector.currentEventType === "TRAVEL") {
+        return "music/travel_music";
+    }
+    if (state.currentScreen === "COMBAT_SCREEN") {
+        return "music/combat_music";
+    }
+    return null;
 }
 
 /** Replace the run and open the first shop. */
 export function startNewGame(): void {
-    beginAttempt();
-    const state = getGameState();
-    state.playerData = initPlayerData();
-    state.gameDirector = initGameDirector();
-    state.currentScreen = "BUILDING_SCREEN";
+    requestTransition(() => {
+        beginAttempt();
+        const state = getGameState();
+        state.playerData = initPlayerData();
+        state.gameDirector = initGameDirector();
+        state.currentScreen = "BUILDING_SCREEN";
+    });
 }
 
 export function switchGameState(newState: GameScreen) {
-    const state = getGameState();
-    state.currentScreen = newState;
+    requestTransition(() => {
+        getGameState().currentScreen = newState;
+    });
 }

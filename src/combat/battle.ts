@@ -8,6 +8,7 @@ import {
     DEFEAT_HEALTH_RATIO,
     DIRECT_MISS_DISTANCE,
     EXPLOSION_DURATION,
+    OPENING_FIRE_DELAY,
     FAIL_DAMAGE_OF_MAX_HEALTH,
     FAIL_EXPLOSION_RADIUS,
     HIT_FLASH_DURATION,
@@ -135,6 +136,8 @@ export interface Battle {
     /** Catalog bounty for defeating this enemy. Paid only on victory. */
     moneyDropped: number;
     enemyActionDelay: number;
+    /** Seconds left before either tank is allowed to start a shot. */
+    openingFireDelay: number;
     time: number;
 }
 
@@ -785,6 +788,14 @@ function detonate(
     }
 }
 
+/** Drop the aim point while the opening delay is running, so a click cannot start a shot. */
+function holdFire(input: CombatInput | null, locked: boolean): CombatInput | null {
+    if (!input || !locked) {
+        return input;
+    }
+    return { chosenAbility: input.chosenAbility, target: null };
+}
+
 function ordersToInput(orders: CombatantOrders | null): CombatInput | null {
     if (!orders) {
         return null;
@@ -812,6 +823,7 @@ export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehic
         result: null,
         moneyDropped,
         enemyActionDelay: randomEnemyDelay(),
+        openingFireDelay: OPENING_FIRE_DELAY,
         time: 0,
     };
 }
@@ -870,15 +882,22 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
         placeRepair(battle.enemy, battle, orders.enemy?.repair ?? null);
     }
 
-    const playerInput = fightOver ? null : ordersToInput(orders.player);
+    const firingLocked = battle.openingFireDelay > 0;
+    if (firingLocked) {
+        battle.openingFireDelay = Math.max(0, battle.openingFireDelay - dt);
+        if (orders.enemyAi) {
+            battle.enemyActionDelay = Math.max(0, battle.enemyActionDelay - dt);
+        }
+    }
+    const playerInput = fightOver ? null : holdFire(ordersToInput(orders.player), firingLocked);
     updateCombatant(battle, battle.player, dt, playerInput, view.playerCamera);
     const enemyInput = fightOver
         ? null
         : orders.enemy
-            ? ordersToInput(orders.enemy)
-            : orders.enemyAi
-                ? enemyCombatInput(battle, battle.enemy, battle.player, view.playerCamera, dt)
-                : null;
+            ? holdFire(ordersToInput(orders.enemy), firingLocked)
+            : firingLocked || !orders.enemyAi
+                ? null
+                : enemyCombatInput(battle, battle.enemy, battle.player, view.playerCamera, dt);
     updateCombatant(battle, battle.enemy, dt, enemyInput, view.enemyCamera);
 
     const targets: { combatant: Combatant; camera: CombatCamera }[] = [];

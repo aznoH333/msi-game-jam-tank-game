@@ -309,3 +309,22 @@ export function renderRects(): void {
 export function renderOverlayRects(): void {
     paintRects(queuedRects.splice(0));
 }
+
+let screenFade = 0;
+
+/** Cover the frame with black. 0 leaves the picture alone. */
+export function setScreenFade(alpha: number): void {
+    screenFade = Math.min(1, Math.max(0, alpha));
+}
+
+/** Paint the black cover after every other layer, including the 3D view. */
+export function renderScreenFade(): void {
+    if (screenFade <= 0) {
+        return;
+    }
+    const context = getCanvasContext();
+    context.save();
+    context.fillStyle = `rgba(0, 0, 0, ${screenFade})`;
+    context.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    context.restore();
+}
