@@ -11,6 +11,7 @@ import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
+import { serializeVehicle } from "./vehicleSave";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
 import { brokenVehicleRules, buyWeaponSlot, canAddWeapon, nextWeaponSlotPrice, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
 import { TANK_TRACK_SPRITE, tankTrackColumns } from "./tankTracks";
@@ -129,7 +130,7 @@ function drawLaunchControl(launch: Bounds, failures: VehicleRuleFailure[]): void
 }
 
 function copyVehicleJson(vehicle: BaseVehicle): void {
-    const json = JSON.stringify(vehicle);
+    const json = JSON.stringify(serializeVehicle(vehicle));
     const clipboard = navigator.clipboard;
     if (!clipboard) {
         return;

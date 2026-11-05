@@ -20,9 +20,9 @@
 # short term goals.
 - [X] impl new tiles and variations
 - [X] better explosion
-- [ ] spark effects
-- [ ] impl tracks
-- [ ] impl ground sprite
+- [X] spark effects
+- [X] impl tracks
+- [X] impl ground sprite
 - [ ] travel buildings and floor
 - [ ] travel icons
 - [ ] talking guy

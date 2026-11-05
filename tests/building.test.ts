@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { TILE_CATALOG } from "../src/building/constants/tileCatalog";
 import { buyOffer, shopOffers } from "../src/building/itemShop";
 import { tankTrackColumns, tankTrackSprite } from "../src/building/tankTracks";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
+import { serializeVehicle, vehicleFromSave } from "../src/building/vehicleSave";
 import { adjustOverclock, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
 import { brokenVehicleRules, buyWeaponSlot, nextWeaponSlotPrice } from "../src/building/vehicleRules";
 import { initPlayerData } from "../src/game/playerData";
@@ -10,6 +12,7 @@ import { initPlayerData } from "../src/game/playerData";
 const NEEDS_GUN = "The vehicle needs a gun.";
 const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not allowed.";
 const TOO_MANY_WEAPONS = "Not enough weapon slots.";
+const TOO_TALL = "The vehicle can be at most twice as tall as it is wide.";
 
 function part(x: number, y: number, width = 1, height = 1, gun = false): PlacedTile {
     return {
@@ -87,6 +90,26 @@ describe("vehicle launch rules", () => {
             part(1, 0, 1, 1, true),
             part(4, 0),
         ]), [MUST_CONNECT]);
+    });
+
+    it("rejects a vehicle more than twice as tall as it is wide", () => {
+        assert.deepEqual(warnings([
+            part(0, 0, 2, 2, true),
+            part(0, 2),
+            part(0, 3),
+        ]), []);
+        assert.deepEqual(warnings([
+            part(0, 0, 2, 2, true),
+            part(0, 2),
+            part(0, 3),
+            part(0, 4),
+        ]), [TOO_TALL]);
+        assert.deepEqual(warnings([
+            part(0, 0, 1, 1, true),
+            part(1, 0),
+            part(2, 0),
+            part(3, 0),
+        ]), []);
     });
 });
 
@@ -250,5 +273,53 @@ describe("tank tracks", () => {
         assert.equal(tankTrackSprite(2 / 3), "tiles/tiles_1x1_0011");
         assert.equal(tankTrackSprite(1), "tiles/tiles_1x1_0009");
         assert.equal(tankTrackSprite(4), tankTrackSprite(4));
+    });
+});
+
+describe("vehicle files", () => {
+    it("stores the tile name, position, and overclock values, then rebuilds from the catalog", () => {
+        const gun = TILE_CATALOG.WEAPON.find((tile) => tile.tileName === "Machine gun");
+        const frame = TILE_CATALOG.BLOCK.find((tile) => tile.tileName === "Metal frame");
+        assert.ok(gun?.turret);
+        assert.ok(frame);
+        const saved = serializeVehicle({
+            name: "Test",
+            tiles: [
+                {
+                    base: gun,
+                    x: 3,
+                    y: 4,
+                    overclocks: gun.turret.overClocks.map((slider, index) => ({
+                        base: slider,
+                        value: index === 0 ? 2 : slider.baseValue,
+                    })),
+                },
+                { base: frame, x: 1, y: 1, overclocks: [] },
+            ],
+        });
+        assert.deepEqual(saved.tiles[0], {
+            tileName: "Machine gun",
+            x: 3,
+            y: 4,
+            overclocks: [
+                { name: "Salvo extender", value: 2 },
+                { name: "Speed loader", value: 0 },
+                { name: "Oversized shells", value: 0 },
+            ],
+        });
+
+        const loaded = vehicleFromSave(saved);
+        assert.equal(loaded.name, "Test");
+        assert.equal(loaded.tiles[0].base.health, gun.health);
+        assert.equal(loaded.tiles[0].base.turret?.damagePerShot, gun.turret.damagePerShot);
+        assert.notEqual(loaded.tiles[0].base, gun);
+        assert.equal(loaded.tiles[0].overclocks[0].value, 2);
+        assert.equal(loaded.tiles[0].overclocks[0].base, loaded.tiles[0].base.turret?.overClocks[0]);
+        assert.equal(loaded.tiles[1].base.tileName, "Metal frame");
+        assert.equal(loaded.tiles[1].x, 1);
+        assert.throws(() => vehicleFromSave({
+            name: "Missing",
+            tiles: [{ tileName: "Not a tile", x: 0, y: 0, overclocks: [] }],
+        }));
     });
 });

@@ -154,6 +154,23 @@ describe("combat loop", () => {
         assert.ok(outcome.player.energy <= 5);
     });
 
+    it("reloads a gun when a salvo stops because the tank is out of energy", () => {
+        const playerGun = gun(0, 0, 20, 3);
+        playerGun.base.turret!.salvoCount = 2;
+        playerGun.base.turret!.reloadTime = 10;
+        const match = combatMatch(
+            vehicle("Player", [playerGun]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const aim = match.tile("enemy", 0);
+        const outcome = match
+            .at(0, "player", { fire: { gun: 0, at: aim } })
+            .at(1.5, "player", { fire: { gun: 0, at: aim } })
+            .run(1.5);
+
+        assert.equal(outcome.enemy.tiles[0].health, 80);
+    });
+
     it("lets the enemy's scripted shot damage the player", () => {
         const match = combatMatch(
             vehicle("Player", [block(0, 0, 100)]),

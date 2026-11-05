@@ -9,6 +9,7 @@ export interface VehicleRuleFailure {
 const NEEDS_GUN = "The vehicle needs a gun.";
 const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not allowed.";
 const TOO_MANY_WEAPONS = "Not enough weapon slots.";
+const TOO_TALL = "The vehicle can be at most twice as tall as it is wide.";
 
 /** First extra slot costs this much. Each slot already owned adds another step. */
 export const WEAPON_SLOT_PRICE_STEP = 10_000;
@@ -49,6 +50,9 @@ export function brokenVehicleRules(vehicle: BaseVehicle, weaponSlots = Number.PO
     if (!tilesAreConnected(vehicle.tiles)) {
         failures.push({ explanation: MUST_CONNECT });
     }
+    if (isTallerThanTwiceItsWidth(vehicle.tiles)) {
+        failures.push({ explanation: TOO_TALL });
+    }
     return failures;
 }
 
@@ -76,4 +80,22 @@ function tilesTouch(a: PlacedTile, b: PlacedTile): boolean {
     const overlapX = Math.min(a.x + a.base.width, b.x + b.base.width) - Math.max(a.x, b.x);
     const overlapY = Math.min(a.y + a.base.height, b.y + b.base.height) - Math.max(a.y, b.y);
     return overlapX >= 0 && overlapY >= 0 && (overlapX > 0 || overlapY > 0);
+}
+
+/** Height is the span of occupied tiles. Exactly twice as tall is allowed. */
+function isTallerThanTwiceItsWidth(tiles: PlacedTile[]): boolean {
+    if (tiles.length === 0) {
+        return false;
+    }
+    let minX = tiles[0].x;
+    let minY = tiles[0].y;
+    let maxX = minX + tiles[0].base.width;
+    let maxY = minY + tiles[0].base.height;
+    for (const tile of tiles) {
+        minX = Math.min(minX, tile.x);
+        minY = Math.min(minY, tile.y);
+        maxX = Math.max(maxX, tile.x + tile.base.width);
+        maxY = Math.max(maxY, tile.y + tile.base.height);
+    }
+    return maxY - minY > (maxX - minX) * 2;
 }

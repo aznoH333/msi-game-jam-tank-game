@@ -1,1 +1,48 @@
-{"name":"bingulus fungulus","tiles":[{"base":{"tileName":"Debug gun","type":"WEAPON","tileSprite":"tiles/debug_turret_base","width":2,"height":2,"price":10000,"health":100,"explosionDamage":20,"explosionRadius":2.5,"turret":{"turretSprite":"tiles/debug_turret","accuracy":2,"damagePerShot":40,"powerPerShot":10,"salvoCount":3,"salvoDelay":0.2,"reloadTime":3.5,"explosionRadius":1.2,"projectileSpeed":85,"projectileType":"direct","overClocks":[{"name":"Damage overclock","baseValue":0,"minValue":-0.5,"maxValue":1,"stepSize":0.25,"damage":1.1,"powerCost":1.2}]}},"x":16,"y":18,"overclocks":[{"base":{"name":"Damage overclock","baseValue":0,"minValue":-0.5,"maxValue":1,"stepSize":0.25,"damage":1.1,"powerCost":1.2},"value":0}]},{"base":{"tileName":"Small battery","type":"UTILITY","tileSprite":"tiles/debug_battery_small","width":1,"height":1,"powerCapacity":50,"price":500,"health":40,"explosionRadius":1.5,"explosionDamage":5},"x":16,"y":20,"overclocks":[]},{"base":{"tileName":"Small generator","type":"UTILITY","tileSprite":"tiles/debug_generator_small","width":1,"height":1,"powerGenerationPerSecond":5,"price":1000,"health":40,"explosionRadius":2,"explosionDamage":5},"x":17,"y":20,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":18,"y":17,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":17,"y":17,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":16,"y":17,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":15,"y":17,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":15,"y":18,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":15,"y":19,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":15,"y":20,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":15,"y":21,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":16,"y":21,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":17,"y":21,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":18,"y":21,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":18,"y":20,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":18,"y":19,"overclocks":[]},{"base":{"tileName":"Block 2","type":"BLOCK","tileSprite":"tiles/debug_tiles_0002","width":1,"height":1,"price":200,"health":50},"x":18,"y":18,"overclocks":[]}]}
+{
+  "name": "bingulus fungulus",
+  "tiles": [
+    {
+      "tileName": "Machine gun",
+      "x": 15,
+      "y": 16,
+      "overclocks": [
+        {
+          "name": "Salvo extender",
+          "value": 0
+        },
+        {
+          "name": "Speed loader",
+          "value": 0
+        },
+        {
+          "name": "Oversized shells",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "tileName": "Metal frame",
+      "x": 16,
+      "y": 14,
+      "overclocks": []
+    },
+    {
+      "tileName": "Metal frame",
+      "x": 15,
+      "y": 14,
+      "overclocks": []
+    },
+    {
+      "tileName": "Small battery",
+      "x": 15,
+      "y": 15,
+      "overclocks": []
+    },
+    {
+      "tileName": "Small generator",
+      "x": 16,
+      "y": 15,
+      "overclocks": []
+    }
+  ]
+}

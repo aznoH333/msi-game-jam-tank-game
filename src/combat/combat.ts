@@ -456,6 +456,7 @@ export function updateCombat(): void {
         width: panel.width,
         height: panel.height,
         color: "#1b1f2a",
+        zIndex: 8,
     });
     drawText({
         text: "Victory",
@@ -478,6 +479,7 @@ export function updateCombat(): void {
         width: button.width,
         height: button.height,
         color: "#2f9e44",
+        zIndex: 8,
     });
     drawText({
         text: "Proceed",

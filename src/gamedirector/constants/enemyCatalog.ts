@@ -1,4 +1,5 @@
 import type { BaseVehicle } from "../../building/types/vehicle";
+import { vehicleFromSave, type SavedVehicle } from "../../building/vehicleSave";
 
 export interface EnemyCatalogRecord {
     fileName: string;
@@ -16,7 +17,7 @@ export interface PickedEnemy {
 const enemyVehicleFiles = import.meta.glob("../../../assets/enemies/*.json", {
     eager: true,
     import: "default",
-}) as Record<string, BaseVehicle>;
+}) as Record<string, SavedVehicle>;
 
 
 export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
@@ -56,7 +57,7 @@ export function pickEnemyVehicle(eventIndex: number): PickedEnemy {
         throw new Error(`Missing enemy file ${record.fileName}`);
     }
     return {
-        vehicle,
+        vehicle: vehicleFromSave(vehicle),
         moneyDropped: record.moneyDropped,
     };
 }

@@ -320,7 +320,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
         {
             tileName: "Metal frame",
             type: "BLOCK",
-            tileSprite: ["tiles/tiles_1x1_0003", "tiles/tiles_1x1_0004"],
+            tileSprite: ["tiles/tiles_1x1_0004"],
             width: 1,
             height: 1,
             price: 200,

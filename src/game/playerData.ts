@@ -1,3 +1,5 @@
+import starterVehicle from "../../assets/playerVehicles/1.json";
+import { vehicleFromSave } from "../building/vehicleSave";
 import { BaseVehicle } from "../building/types/vehicle";
 import { WeaponName } from "../exploration/constants/weaponCatalog";
 
@@ -16,10 +18,7 @@ export interface PlayerData {
 /** Initializes empty player data "new game" */
 export function initPlayerData(): PlayerData {
     return {
-        vehicle: {
-            name: "Tank",
-            tiles: []
-        },
+        vehicle: vehicleFromSave(starterVehicle),
         money: 20_000,
         overclockModules: 3,
         weapons: {

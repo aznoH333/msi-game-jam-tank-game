@@ -462,6 +462,7 @@ function updateCombatant(
                 const cost = Math.max(0, stats.powerPerShot);
                 if (combatant.instance.power < cost) {
                     runtime.shotsLeft = 0;
+                    runtime.cooldown = Math.max(0, stats.reloadTime);
                     break;
                 }
                 const jammed = Math.random() < Math.max(0, stats.jamChance);
