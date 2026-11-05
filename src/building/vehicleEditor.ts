@@ -1,3 +1,4 @@
+import { playSound } from "../audio/audio";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText, measureText } from "../drawing/text";
@@ -153,6 +154,16 @@ function placementOrigin(grid: GridGeometry, mouseX: number, mouseY: number, til
         x: Math.round((mouseX - grid.x) / grid.cell - tile.width / 2),
         y: Math.round((mouseY - grid.y) / grid.cell - tile.height / 2),
     };
+}
+
+function placeSound(type: TileType): string {
+    if (type === "WEAPON") {
+        return "building/weapon_place";
+    }
+    if (type === "UTILITY") {
+        return "building/utility_place";
+    }
+    return "building/block_place";
 }
 
 function drawTileSprite(
@@ -316,6 +327,7 @@ export function updateVehicleEditor(state: GameState): void {
             state.playerData.money += removed.base.price;
             state.playerData.overclockModules += modulesInTile(removed);
             state.playerData.vehicle.tiles.splice(index, 1);
+            playSound("building/tile_remove");
         }
     } else if (!panning && leftDown && !copyClicked) {
         let overSidebar = false;
@@ -413,6 +425,7 @@ export function updateVehicleEditor(state: GameState): void {
                             value: slider.baseValue,
                         })),
                     });
+                    playSound(placeSound(tileToPlace.type));
                 }
             }
         }

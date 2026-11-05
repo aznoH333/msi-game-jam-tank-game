@@ -33,7 +33,8 @@ import {
     type CombatCamera,
     type CombatViewport,
 } from "./combatLayout";
-import type { TileInstance } from "./types/tileInstance";
+import { FAULT_ICON_DURATION } from "./statusIcons";
+import type { GunFault, TileInstance } from "./types/tileInstance";
 import type { VehicleInstance } from "./types/vehicleInstance";
 
 const ENEMY_ACTION_MIN = 1;
@@ -70,6 +71,7 @@ interface Projectile {
     damage: number;
     projectileType: ProjectileType;
     projectileSprite: string;
+    impactSound: string;
     /** The tank that fired this shot. Direct hits ignore its tiles. */
     owner: Combatant;
 }
@@ -127,6 +129,8 @@ export interface Battle {
     explosions: Explosion[];
     sparks: Spark[];
     repairs: RepairCircle[];
+    /** Sound names queued this step. The combat screen plays and clears them. */
+    sounds: string[];
     result: "victory" | "defeat" | null;
     /** Catalog bounty for defeating this enemy. Paid only on victory. */
     moneyDropped: number;
@@ -149,6 +153,10 @@ export interface CombatTileState {
     maxHealth: number;
     /** 1 is full white, 0 is the tile's normal color. */
     flash: number;
+    /** 1 is full green, 0 is the tile's normal color. */
+    healFlash: number;
+    fault: GunFault | null;
+    faultAge: number;
 }
 
 export interface CombatSideState {
@@ -167,6 +175,8 @@ export interface CombatState {
     player: CombatSideState;
     enemy: CombatSideState;
     sparks: { x: number; y: number }[];
+    /** Sound names queued since the fight started, until the combat screen plays them. */
+    sounds: string[];
 }
 
 export function gunsOf(instance: VehicleInstance): TileInstance[] {
@@ -217,6 +227,9 @@ function createCombatant(vehicle: BaseVehicle, control: CombatControl): Combatan
             tile,
             health: tile.base.health,
             hitFlash: 0,
+            healFlash: 0,
+            fault: null,
+            faultAge: 0,
         })),
         power: getTotalPowerCapacity(base),
     };
@@ -278,6 +291,7 @@ export function combatSnapshot(battle: Battle): CombatState {
         player: sideState(battle.player),
         enemy: sideState(battle.enemy),
         sparks: battle.sparks.map((spark) => ({ x: spark.x, y: spark.y })),
+        sounds: battle.sounds.slice(),
     };
 }
 
@@ -293,6 +307,9 @@ function sideState(combatant: Combatant): CombatSideState {
             health: part.health,
             maxHealth: part.tile.base.health,
             flash: part.hitFlash <= 0 ? 0 : Math.min(1, part.hitFlash / HIT_FLASH_DURATION),
+            healFlash: part.healFlash <= 0 ? 0 : Math.min(1, part.healFlash / HIT_FLASH_DURATION),
+            fault: part.fault,
+            faultAge: part.faultAge,
         })),
     };
 }
@@ -393,10 +410,14 @@ function updateRepairs(
                 if (maxHealth <= 0) {
                     continue;
                 }
+                const before = part.health;
                 if (part.health <= 0) {
                     part.health = maxHealth * REPAIR_REVIVE_RATIO;
                 } else {
                     part.health = Math.min(maxHealth, part.health + maxHealth * REPAIR_HEAL_PER_SECOND * circle.pendingDt);
+                }
+                if (part.health > before) {
+                    part.healFlash = HIT_FLASH_DURATION;
                 }
             }
         }
@@ -477,6 +498,9 @@ function updateCombatant(
                     combatant.instance.power = Math.max(0, combatant.instance.power - spent);
                     runtime.shotsLeft = 0;
                     runtime.cooldown = Math.max(0, stats.reloadTime);
+                    gun.fault = failed ? "fail" : "jam";
+                    gun.faultAge = 0;
+                    cueSound(battle, "weapons/weapon_jam");
                     if (failed) {
                         const origin = tileToWorld(
                             ownCamera,
@@ -530,8 +554,10 @@ function updateCombatant(
                     damage: Math.max(0, stats.damagePerShot),
                     projectileType: turret.projectileType,
                     projectileSprite: turret.projectileSprite || "weapons/bullet",
+                    impactSound: turret.impactSound,
                     owner: combatant,
                 });
+                cueSound(battle, turret.firingSound);
                 runtime.shotsLeft -= 1;
                 if (runtime.shotsLeft > 0 && stats.salvoDelay > 0) {
                     runtime.timeUntilShot += stats.salvoDelay;
@@ -674,6 +700,7 @@ function destroyDefeatedTank(battle: Battle, combatant: Combatant, camera: Comba
         radius: DEFEAT_EXPLOSION_RADIUS,
         age: 0,
     });
+    cueExplosion(battle, DEFEAT_EXPLOSION_RADIUS);
 }
 
 /** Damage every living tile in range, and let destroyed explosive tiles burst too. */
@@ -684,14 +711,19 @@ function detonate(
     radius: number,
     damage: number,
     targets: { combatant: Combatant; camera: CombatCamera }[],
+    /** The projectile's impact clip is already this blast, so don't play it twice. */
+    quietFirst = false,
 ): void {
-    const pending = [{ x, y, radius, damage }];
+    const pending = [{ x, y, radius, damage, silent: quietFirst }];
     while (pending.length > 0) {
         const boom = pending.shift();
         if (!boom) {
             break;
         }
         battle.explosions.push({ x: boom.x, y: boom.y, radius: boom.radius, age: 0 });
+        if (!boom.silent) {
+            cueExplosion(battle, boom.radius);
+        }
         if (boom.radius <= 0 || boom.damage <= 0) {
             continue;
         }
@@ -746,6 +778,7 @@ function detonate(
                     y: origin.y,
                     radius: deathRadius,
                     damage: deathDamage,
+                    silent: false,
                 });
             }
         }
@@ -775,11 +808,32 @@ export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehic
         explosions: [],
         sparks: [],
         repairs: [],
+        sounds: [],
         result: null,
         moneyDropped,
         enemyActionDelay: randomEnemyDelay(),
         time: 0,
     };
+}
+
+function cueSound(battle: Battle, name: string | undefined): void {
+    if (name) {
+        battle.sounds.push(name);
+    }
+}
+
+/** A blast under this radius uses the smaller explosion clip. */
+const SMALL_EXPLOSION_RADIUS = 3;
+
+function cueExplosion(battle: Battle, radius: number): void {
+    if (radius <= 0) {
+        return;
+    }
+    cueSound(battle, radius < SMALL_EXPLOSION_RADIUS ? "weapons/explosion_small" : "weapons/explosion");
+}
+
+function explosionImpact(name: string | undefined): boolean {
+    return name === "weapons/explosion" || name === "weapons/explosion_small";
 }
 
 function flashTile(part: TileInstance): void {
@@ -791,6 +845,15 @@ function ageHitFlashes(battle: Battle, dt: number): void {
         for (const part of combatant.instance.tiles) {
             const next = part.hitFlash - dt;
             part.hitFlash = next <= 1e-8 ? 0 : next;
+            const healed = part.healFlash - dt;
+            part.healFlash = healed <= 1e-8 ? 0 : healed;
+            if (part.fault) {
+                part.faultAge += dt;
+                if (part.faultAge >= FAULT_ICON_DURATION - 1e-6) {
+                    part.fault = null;
+                    part.faultAge = 0;
+                }
+            }
         }
     }
 }
@@ -841,6 +904,7 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
             }
         }
         if (impactT !== null) {
+            cueSound(battle, shot.impactSound);
             detonate(
                 battle,
                 shot.fromX + (shot.toX - shot.fromX) * impactT,
@@ -848,6 +912,7 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
                 shot.explosionRadius,
                 shot.damage,
                 targets,
+                explosionImpact(shot.impactSound),
             );
             continue;
         }

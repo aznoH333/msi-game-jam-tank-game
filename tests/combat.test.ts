@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { PlacedTile } from "../src/building/types/tiles";
 import type { BaseVehicle } from "../src/building/types/vehicle";
 import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, REPAIR_DURATION } from "../src/combat/constants";
+import { FAULT_ICON_DURATION, iconFlashAlpha } from "../src/combat/statusIcons";
 import { combatMatch } from "../src/combat/testHarness";
 
 function block(x: number, y: number, health: number): PlacedTile {
@@ -128,6 +129,7 @@ describe("combat loop", () => {
 
         assert.equal(won.winner, "player");
         assert.equal(won.moneyDropped, bounty);
+        assert.ok(won.sounds.includes("weapons/explosion"));
 
         const loss = combatMatch(
             vehicle("Player", [block(0, 0, 100)]),
@@ -196,9 +198,10 @@ describe("combat loop", () => {
             .run(0.5 + REPAIR_DURATION);
 
         assert.equal(outcome.winner, null);
+        // 40 damage, then five heals of 5 across the five-second circle.
         assert.ok(
-            Math.abs(outcome.player.tiles[0].health - 72.5) < 0.05,
-            `expected about 72.5, got ${outcome.player.tiles[0].health}`,
+            Math.abs(outcome.player.tiles[0].health - 85) < 0.05,
+            `expected about 85, got ${outcome.player.tiles[0].health}`,
         );
         assert.ok(outcome.player.repairCooldown > 0);
     });
@@ -215,10 +218,10 @@ describe("combat loop", () => {
             .run(0.5 + REPAIR_DURATION);
 
         assert.equal(outcome.winner, null);
-        // Back to 10% on the first tick, then nine heals of 1.25 across the rest of the circle.
+        // Back to 10% on the first tick, then four heals of 5 across the rest of the circle.
         assert.ok(
-            Math.abs(outcome.player.tiles[0].health - 21.25) < 0.05,
-            `expected about 21.25, got ${outcome.player.tiles[0].health}`,
+            Math.abs(outcome.player.tiles[0].health - 30) < 0.05,
+            `expected about 30, got ${outcome.player.tiles[0].health}`,
         );
         assert.equal(outcome.player.tiles[1].health, 100);
     });
@@ -274,6 +277,89 @@ describe("combat loop", () => {
         );
         const heavyHit = heavy.at(0, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(0.25);
         assert.ok(heavyHit.sparks.length > lightHit.sparks.length);
+    });
+
+    it("plays a weapon's firing sound when it shoots and its impact sound when the shot lands", () => {
+        const playerGun = gun(0, 0, 30, 10);
+        const turret = playerGun.base.turret;
+        if (!turret) {
+            throw new Error("gun has no turret");
+        }
+        turret.firingSound = "weapons/cannon_small";
+        turret.impactSound = "weapons/explosion_small";
+        const match = combatMatch(
+            vehicle("Player", [playerGun, battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        match.at(0, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } });
+        let fired = false;
+        for (let step = 0; step < 40; step++) {
+            const state = match.run(0.05, 0.05);
+            if (state.sounds.includes("weapons/cannon_small")) {
+                fired = true;
+            }
+            if (state.enemy.tiles[0].health < 100) {
+                assert.equal(fired, true);
+                assert.ok(state.sounds.includes("weapons/explosion_small"));
+                return;
+            }
+        }
+        assert.equal(fired, true);
+    });
+
+    it("flashes a jam icon twice over two seconds, and a fail icon when the gun explodes", () => {
+        assert.equal(iconFlashAlpha(0, FAULT_ICON_DURATION), 1);
+        assert.ok(Math.abs(iconFlashAlpha(0.5, FAULT_ICON_DURATION) - 0.5) < 1e-9);
+        assert.equal(iconFlashAlpha(1, FAULT_ICON_DURATION), 1);
+        assert.equal(iconFlashAlpha(FAULT_ICON_DURATION, FAULT_ICON_DURATION), 0);
+        assert.equal(iconFlashAlpha(5), 1);
+
+        const jammedGun = gun(0, 0, 40, 10);
+        jammedGun.base.powerCapacity = 100;
+        jammedGun.overclocks = [chanceOverclock("jamChance")];
+        const jammed = combatMatch(
+            vehicle("Player", [jammedGun]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        jammed.at(0, "player", { fire: { gun: 0, at: jammed.tile("enemy", 0) } });
+        const jam = jammed.run(0.05);
+        assert.equal(jam.player.tiles[0].fault, "jam");
+        assert.equal(jam.player.tiles[0].faultAge, 0);
+        assert.ok(jam.sounds.includes("weapons/weapon_jam"));
+        const secondFlash = jammed.run(1);
+        assert.equal(secondFlash.player.tiles[0].fault, "jam");
+        assert.ok(Math.abs(secondFlash.player.tiles[0].faultAge - 1) < 1e-6);
+        const cleared = jammed.run(1);
+        assert.equal(cleared.player.tiles[0].fault, null);
+
+        const failedGun = gun(0, 0, 40, 10);
+        failedGun.base.powerCapacity = 100;
+        failedGun.overclocks = [chanceOverclock("failChance")];
+        const failed = combatMatch(
+            vehicle("Player", [failedGun]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const fail = failed.at(0, "player", { fire: { gun: 0, at: failed.tile("enemy", 0) } }).run(0.05);
+        assert.equal(fail.player.tiles[0].fault, "fail");
+        assert.ok(fail.sounds.includes("weapons/weapon_jam"));
+        assert.ok(fail.sounds.includes("weapons/explosion_small"));
+    });
+
+    it("flashes a repaired tile green, and leaves an untouched tile alone", () => {
+        const match = combatMatch(
+            vehicle("Player", [block(0, 0, 100), block(8, 0, 100)]),
+            vehicle("Enemy", [gun(0, 0, 40, 10), battery(2, 0)]),
+        );
+        const wounded = match.tile("player", 0);
+        match.at(0, "enemy", { fire: { gun: 0, at: wounded } }).at(0.5, "player", { repair: { at: wounded } });
+        match.run(0.5);
+        const healed = match.run(1);
+        assert.equal(healed.player.tiles[0].healFlash, 1);
+        assert.ok(healed.player.tiles[0].health > 60);
+        assert.equal(healed.player.tiles[1].healFlash, 0);
+        assert.equal(healed.player.tiles[1].health, 100);
+        const faded = match.run(0.05);
+        assert.equal(faded.player.tiles[0].healFlash, 0);
     });
 
     it("turns a damaged tile white, then fades that back over 50ms", () => {

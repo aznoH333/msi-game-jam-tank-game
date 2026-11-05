@@ -4,6 +4,7 @@ import { drawRect, getDrawClip, setDrawClip, strokeRect } from "../drawing/canva
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
 import { HIT_FLASH_DURATION } from "./constants";
+import { FAULT_ICON_DURATION, iconFlashAlpha } from "./statusIcons";
 import type { VehicleInstance } from "./types/vehicleInstance";
 import {
     combatTileCenter,
@@ -14,6 +15,9 @@ import {
 
 const BROKEN_TILE_SPRITES = ["tiles/tiles_1x1_0007", "tiles/tiles_1x1_0008"];
 const GROUND_SPRITE = "combat/ground";
+const JAM_ICON = "combat/jam_icon";
+const FAIL_ICON = "combat/fail_icon";
+const HEAL_FLASH_COLOR = "#5dff8a";
 /** Source pixel of the road that sits on the vehicle center. The strip is 620 wide. */
 const GROUND_CENTER_X = 310;
 
@@ -103,61 +107,78 @@ export function drawCombatVehicle(
     instance.tiles.forEach((part, index) => {
         const tile = part.tile;
         const flash = tileFlash(part.hitFlash);
-        if (part.health <= 0) {
-            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted, shakeX, shakeY, flash);
-            return;
-        }
-        const maxHealth = tile.base.health;
-        const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, part.health) / maxHealth;
-        // full color at full health, 30% of each channel when health is gone
-        const shade = 0.3 + 0.7 * healthRatio;
-        const channel = Math.round(255 * shade);
-        const damageTint = shade >= 1 ? undefined : `rgb(${channel}, ${channel}, ${channel})`;
-        const width = tile.base.width * layout.cell;
-        const height = tile.base.height * layout.cell;
-        const left = layout.originX + tile.x * layout.cell + shakeX;
-        const top = layout.originY + tile.y * layout.cell;
-        const drawTop = (inverted ? footprintCenterY * 2 - (top + height) : top) + shakeY;
-        drawRect({
-            x: left,
-            y: drawTop,
-            width,
-            height,
-            color: scaleColor("#2e3648", shade, flash),
-        });
-        strokeRect({
-            x: left + 0.5,
-            y: drawTop + 0.5,
-            width,
-            height,
-            color: scaleColor("#3a4254", shade, flash),
-        });
+        const heal = tileFlash(part.healFlash);
         const center = combatTileCenter(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
         center.x += shakeX;
         center.y += shakeY;
-        drawSprite({
-            sprite: tileSpriteAt(tile.base.tileSprite, tile.x, tile.y),
-            x: center.x,
-            y: center.y,
-            scaleX: scale,
-            scaleY: inverted ? -scale : scale,
-            color: damageTint,
-            white: flash,
-            zIndex: 1,
-        });
-        if (tile.base.turret) {
+        const healCover = heal > 0 ? { color: HEAL_FLASH_COLOR, amount: heal } : undefined;
+        if (part.health <= 0) {
+            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted, shakeX, shakeY, flash);
+        } else {
+            const maxHealth = tile.base.health;
+            const healthRatio = maxHealth <= 0 ? 0 : Math.max(0, part.health) / maxHealth;
+            // full color at full health, 30% of each channel when health is gone
+            const shade = 0.3 + 0.7 * healthRatio;
+            const channel = Math.round(255 * shade);
+            const damageTint = shade >= 1 ? undefined : `rgb(${channel}, ${channel}, ${channel})`;
+            const width = tile.base.width * layout.cell;
+            const height = tile.base.height * layout.cell;
+            const left = layout.originX + tile.x * layout.cell + shakeX;
+            const top = layout.originY + tile.y * layout.cell;
+            const drawTop = (inverted ? footprintCenterY * 2 - (top + height) : top) + shakeY;
+            drawRect({
+                x: left,
+                y: drawTop,
+                width,
+                height,
+                color: scaleColor("#2e3648", shade, flash, heal),
+            });
+            strokeRect({
+                x: left + 0.5,
+                y: drawTop + 0.5,
+                width,
+                height,
+                color: scaleColor("#3a4254", shade, flash, heal),
+            });
             drawSprite({
-                sprite: tile.base.turret.turretSprite,
+                sprite: tileSpriteAt(tile.base.tileSprite, tile.x, tile.y),
                 x: center.x,
                 y: center.y,
                 scaleX: scale,
                 scaleY: inverted ? -scale : scale,
-                rotationRad: turretRotations[index] ?? 0,
-                originX: tile.base.turret.spriteCenterX,
-                originY: tile.base.turret.spriteCenterY,
                 color: damageTint,
                 white: flash,
-                zIndex: 2,
+                cover: healCover,
+                zIndex: 1,
+            });
+            if (tile.base.turret) {
+                drawSprite({
+                    sprite: tile.base.turret.turretSprite,
+                    x: center.x,
+                    y: center.y,
+                    scaleX: scale,
+                    scaleY: inverted ? -scale : scale,
+                    rotationRad: turretRotations[index] ?? 0,
+                    originX: tile.base.turret.spriteCenterX,
+                    originY: tile.base.turret.spriteCenterY,
+                    color: damageTint,
+                    white: flash,
+                    cover: healCover,
+                    zIndex: 2,
+                });
+            }
+        }
+        const faultAlpha = part.fault ? iconFlashAlpha(part.faultAge, FAULT_ICON_DURATION) : 0;
+        if (part.fault && faultAlpha > 0) {
+            drawSprite({
+                sprite: part.fault === "jam" ? JAM_ICON : FAIL_ICON,
+                x: center.x,
+                y: center.y,
+                scaleX: scale,
+                scaleY: scale,
+                alpha: faultAlpha,
+                zIndex: 3,
+                foreground: true,
             });
         }
     });
@@ -243,11 +264,16 @@ function tileFlash(hitFlash: number): number {
     return Math.min(1, hitFlash / HIT_FLASH_DURATION);
 }
 
-function scaleColor(hex: string, factor: number, white = 0): string {
+function scaleColor(hex: string, factor: number, white = 0, heal = 0): string {
     const rgb = Number.parseInt(hex.slice(1), 16);
-    const channel = (value: number) => Math.round(value * factor + (255 - value * factor) * white);
-    const red = channel((rgb >> 16) & 255);
-    const green = channel((rgb >> 8) & 255);
-    const blue = channel(rgb & 255);
+    const greenFlash = Number.parseInt(HEAL_FLASH_COLOR.slice(1), 16);
+    const channel = (value: number, toward: number) => {
+        const shaded = value * factor;
+        const whitened = shaded + (255 - shaded) * white;
+        return Math.round(whitened + (toward - whitened) * heal);
+    };
+    const red = channel((rgb >> 16) & 255, (greenFlash >> 16) & 255);
+    const green = channel((rgb >> 8) & 255, (greenFlash >> 8) & 255);
+    const blue = channel(rgb & 255, greenFlash & 255);
     return `rgb(${red}, ${green}, ${blue})`;
 }

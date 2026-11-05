@@ -23,13 +23,13 @@ export const DEFEAT_EXPLOSION_RADIUS = 5;
 export const REPAIR_RADIUS = 2.5;
 
 /** Share of a living tile's max health restored each second inside a repair circle. */
-export const REPAIR_HEAL_PER_SECOND = 0.025;
+export const REPAIR_HEAL_PER_SECOND = 0.05;
 
 /** How long a repair circle keeps healing, in seconds. */
 export const REPAIR_DURATION = 5;
 
 /** Repair heals and restores on this many simulation frames, using the time those frames covered. */
-export const REPAIR_TICK_FRAMES = 10;
+export const REPAIR_TICK_FRAMES = 20;
 
 /** Share of max health a destroyed tile returns with on a repair tick. */
 export const REPAIR_REVIVE_RATIO = 0.1;

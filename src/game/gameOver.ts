@@ -1,3 +1,4 @@
+import { stopEngine } from "../audio/audio";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
 import { restoreCheckpoint } from "../gamedirector/gamedirector";
@@ -15,11 +16,13 @@ let armed = false;
 /** Show the game over screen. The run stays where it was until the player chooses. */
 export function openGameOver(): void {
     armed = false;
+    stopEngine();
     switchGameState("GAME_OVER_SCREEN");
 }
 
 /** Continue returns to the last shop. Main Menu leaves the run. */
 export function gameOverUpdate(): void {
+    stopEngine();
     const leftDown = isMouseButtonDown(0);
     if (!armed) {
         leftWasDown = leftDown;

@@ -1,3 +1,4 @@
+import { setEngineBlend } from "../audio/audio";
 import { placedWeaponCount } from "../building/vehicleRules";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
@@ -87,7 +88,7 @@ export function updateExplore(): void {
     lastUpdateMs = now;
     const player = state.playerData;
     if (player.personHealth > 0) {
-        stepPlayer(run, dt);
+        setEngineBlend(stepPlayer(run, dt));
         fireWeapon(run, dt);
         collectPickups(run);
         let damage = 0;
@@ -141,7 +142,8 @@ export function updateExplore(): void {
     }
 }
 
-function stepPlayer(run: Exploration, dt: number): void {
+/** Returns how fast the player moved this step, from 0 to 1. */
+function stepPlayer(run: Exploration, dt: number): number {
     if (isKeyDown("ArrowLeft")) {
         run.yaw += TURN_SPEED * dt;
     }
@@ -171,13 +173,16 @@ function stepPlayer(run: Exploration, dt: number): void {
         wishZ -= rightZ;
     }
     const length = Math.hypot(wishX, wishZ);
-    if (length === 0) {
-        return;
+    if (length === 0 || dt <= 0) {
+        return 0;
     }
+    const fromX = run.x;
+    const fromZ = run.z;
     const scale = MOVE_SPEED * dt / length;
     const moved = slide(run.maze, run.x, run.z, wishX * scale, wishZ * scale);
     run.x = moved.x;
     run.z = moved.z;
+    return Math.min(1, Math.hypot(run.x - fromX, run.z - fromZ) / (MOVE_SPEED * dt));
 }
 
 function slide(maze: Maze, x: number, z: number, dx: number, dz: number): { x: number; z: number } {

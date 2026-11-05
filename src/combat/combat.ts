@@ -1,3 +1,4 @@
+import { playSound, setEngineBlend } from "../audio/audio";
 import { TILE_SIZE_PX } from "../building/types/tiles";
 import { placedWeaponCount } from "../building/vehicleRules";
 import { getOverclockedTurretStats } from "../building/vehicleUtils";
@@ -24,6 +25,7 @@ import {
     type Spark,
 } from "./battle";
 import { EXPLOSION_DURATION, REPAIR_RADIUS } from "./constants";
+import { iconFlashAlpha } from "./statusIcons";
 import {
     aimRotation,
     drawCombatVehicle,
@@ -34,6 +36,7 @@ import {
 } from "./combatView";
 
 const EXPLOSION_SPRITE = "combat/debug_explosion";
+const REPAIR_ICON = "combat/repair_icon";
 const ATTACK_RANGE_FILL = "rgba(214, 64, 52, 0.28)";
 const ATTACK_RANGE_STROKE = "rgba(255, 120, 108, 0.95)";
 const REPAIR_RANGE_FILL = "rgba(63, 190, 110, 0.28)";
@@ -126,6 +129,28 @@ function drawRangeCircle(
         color,
         strokeColor,
         lineWidth: 2,
+    });
+    setDrawClip(previousClip);
+}
+
+/** The wrench sits on the repair circle and fades out once a second while the circle lasts. */
+function drawRepairIcon(camera: CombatCamera, worldX: number, worldY: number, alpha: number): void {
+    if (alpha <= 0) {
+        return;
+    }
+    const screen = worldToScreen(camera, worldX, worldY);
+    const previousClip = getDrawClip();
+    setDrawClip({ x: camera.view.x, y: camera.view.y, width: camera.view.width, height: camera.view.height });
+    const scale = camera.layout.cell / TILE_SIZE_PX;
+    drawSprite({
+        sprite: REPAIR_ICON,
+        x: screen.x,
+        y: screen.y,
+        scaleX: scale,
+        scaleY: scale,
+        alpha,
+        zIndex: 3,
+        foreground: true,
     });
     setDrawClip(previousClip);
 }
@@ -228,6 +253,7 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
 
 /** Player and enemy share this update. Only the supplied input can start a shot. */
 export function updateCombat(): void {
+    setEngineBlend(0);
     const state = getGameState();
     if (!battle || encounterEvent !== state.gameDirector.eventIndex || combatAttempt !== directorAttempt()) {
         encounterEvent = state.gameDirector.eventIndex;
@@ -339,6 +365,9 @@ export function updateCombat(): void {
         repair: repairAt,
     };
     stepBattle(fight, dt, { player: playerOrders, enemy: null, enemyAi: !fightOver });
+    for (const name of fight.sounds.splice(0)) {
+        playSound(name);
+    }
     shakeFromExplosions(fight.explosions, dt, playerCamera, enemyCamera);
     applyShake(playerCamera, playerViewShake);
     applyShake(enemyCamera, enemyViewShake);
@@ -388,6 +417,7 @@ export function updateCombat(): void {
     if (playerCamera) {
         for (const circle of fight.repairs) {
             drawRangeCircle(playerCamera, circle.x, circle.y, REPAIR_RADIUS, REPAIR_RANGE_FILL, REPAIR_RANGE_STROKE);
+            drawRepairIcon(playerCamera, circle.x, circle.y, iconFlashAlpha(circle.age));
         }
     }
     drawRect({

@@ -89,8 +89,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 2.5,
                 projectileSpeed: 85,
                 projectileType: "direct",
-                firingSound: "weapons/cannon_small",
-                impactSound: "weapons/explosion_small",
+                firingSound: "weapons/explosion_small",
+                impactSound: "weapons/metal_impact_2",
 
                 overClocks: [
                     {
@@ -140,8 +140,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 3.5,
                 projectileSpeed: 40,
                 projectileType: "mortar",
-                firingSound: "weapons/cannon_small",
-                impactSound: "weapons/explosion",
+                firingSound: "weapons/explosion_small",
+                impactSound: "weapons/metal_impact_2",
 
                 overClocks: [
                     {
@@ -190,8 +190,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 4.5,
                 projectileSpeed: 85,
                 projectileType: "direct",
-                firingSound: "weapons/cannon",
-                impactSound: "weapons/explosion",
+                firingSound: "weapons/explosion",
+                impactSound: "weapons/metal_impact_2",
 
                 overClocks: [
                     {

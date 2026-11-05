@@ -1,3 +1,4 @@
+import { setEngineBlend } from "../audio/audio";
 import { placedWeaponCount } from "../building/vehicleRules";
 import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
@@ -61,12 +62,13 @@ export function updateTravel(): void {
     const dt = Math.min(0.05, Math.max(0, (now - lastUpdateMs) / 1000));
     lastUpdateMs = now;
     travelTime += dt;
+    const stopZ = BILLBOARD_Z - STOP_AHEAD;
+    setEngineBlend(driveSpeed(travelTime, stopZ) / DRIVE_SPEED);
 
     const viewWidth = GAME_WIDTH - ABILITY_BAR_WIDTH;
     const viewHeight = GAME_HEIGHT / 2;
     const cityView = { x: ABILITY_BAR_WIDTH, y: 0, width: viewWidth, height: viewHeight };
     const playerView = { x: ABILITY_BAR_WIDTH, y: viewHeight, width: viewWidth, height: viewHeight };
-    const stopZ = BILLBOARD_Z - STOP_AHEAD;
     const cameraZ = driveDistance(travelTime, stopZ);
     const stopped = cameraZ >= stopZ - 0.001;
     const nextEvent = getNextEventType();
@@ -234,6 +236,25 @@ function travelButtonLabel(next: EventType): string {
     return "Continue";
 }
 
+/** Speed along the same ramp driveDistance integrates. */
+function driveSpeed(elapsed: number, distance: number): number {
+    const fullRamp = DRIVE_SPEED * RAMP_TIME / 2;
+    const peak = distance < fullRamp * 2 ? distance / RAMP_TIME : DRIVE_SPEED;
+    const rampDistance = peak * RAMP_TIME / 2;
+    const cruiseTime = peak <= 0 ? 0 : Math.max(0, distance - rampDistance * 2) / peak;
+    if (elapsed <= 0 || elapsed >= RAMP_TIME + cruiseTime + RAMP_TIME) {
+        return 0;
+    }
+    if (elapsed < RAMP_TIME) {
+        return peak * elapsed / RAMP_TIME;
+    }
+    if (elapsed < RAMP_TIME + cruiseTime) {
+        return peak;
+    }
+    const decelTime = elapsed - RAMP_TIME - cruiseTime;
+    return peak * (1 - decelTime / RAMP_TIME);
+}
+
 /** Speed up, hold DRIVE_SPEED, then slow to a stop exactly at `distance`. */
 function driveDistance(elapsed: number, distance: number): number {
     const fullRamp = DRIVE_SPEED * RAMP_TIME / 2;
@@ -272,6 +293,9 @@ function presentationVehicle(vehicle: BaseVehicle): VehicleInstance {
             tile,
             health: tile.base.health,
             hitFlash: 0,
+            healFlash: 0,
+            fault: null,
+            faultAge: 0,
         })),
         power: getTotalPowerCapacity(vehicle),
     };

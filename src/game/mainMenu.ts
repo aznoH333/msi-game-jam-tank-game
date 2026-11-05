@@ -1,3 +1,4 @@
+import { stopEngine } from "../audio/audio";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
@@ -13,11 +14,13 @@ let armed = false;
 /** Leave a run and show the title screen. */
 export function returnToMainMenu(): void {
     armed = false;
+    stopEngine();
     switchGameState("MAIN_MENU");
 }
 
 /** Title screen. New Game replaces the current run and opens the first shop. */
 export function mainMenuUpdate(): void {
+    stopEngine();
     const mouse = getMousePosition();
     const leftDown = isMouseButtonDown(0);
     const startDown = isKeyDown("Enter") || isKeyDown("Space");

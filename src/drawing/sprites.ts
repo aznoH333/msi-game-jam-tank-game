@@ -23,6 +23,8 @@ type QueuedSprite = {
     alpha: number;
     color?: string;
     white: number;
+    /** Second silhouette drawn over the sprite, after the white flash. */
+    cover: { color: string; amount: number } | null;
     clip: DrawClip | null;
 };
 
@@ -30,6 +32,7 @@ let tintCanvas: HTMLCanvasElement | null = null;
 let tintContext: CanvasRenderingContext2D | null = null;
 
 const queuedSprites: QueuedSprite[] = [];
+const foregroundSprites: QueuedSprite[] = [];
 
 export function loadSprites(): Promise<void> {
     // load every image under assets/sprites, including nested folders
@@ -68,6 +71,10 @@ export interface DrawCommand {
     color?: string;
     /** Covers the sprite with solid white. 0 leaves it alone, 1 hides the normal color. */
     white?: number;
+    /** Covers the sprite with this color, the same way `white` covers it with white. */
+    cover?: { color: string; amount: number };
+    /** Drawn after circles, so it stays on top of a range ring. */
+    foreground?: boolean;
 }
 
 export function drawSprite({
@@ -83,8 +90,10 @@ export function drawSprite({
     alpha = 1,
     color,
     white = 0,
+    cover,
+    foreground = false,
 }: DrawCommand) {
-    queuedSprites.push({
+    const queued: QueuedSprite = {
         sprite,
         x,
         y,
@@ -97,8 +106,14 @@ export function drawSprite({
         alpha,
         color,
         white,
+        cover: cover && cover.amount > 0 ? cover : null,
         clip: getDrawClip(),
-    });
+    };
+    if (foreground) {
+        foregroundSprites.push(queued);
+    } else {
+        queuedSprites.push(queued);
+    }
 }
 
 export function getSpriteSize(sprite: string): { width: number; height: number } | null {
@@ -115,7 +130,15 @@ export function getSpriteImage(sprite: string): HTMLImageElement | null {
 
 /** Paint sprites queued by drawSprite. Lower zIndex is drawn first. */
 export function renderSprites(): void {
-    const draws = queuedSprites.splice(0);
+    paintSpriteList(queuedSprites.splice(0));
+}
+
+/** Icons queued with `foreground` so they paint after range circles. */
+export function renderForegroundSprites(): void {
+    paintSpriteList(foregroundSprites.splice(0));
+}
+
+function paintSpriteList(draws: QueuedSprite[]): void {
     draws.sort((a, b) => a.zIndex - b.zIndex);
 
     const context = getCanvasContext();
@@ -172,25 +195,43 @@ export function renderSprites(): void {
         }
 
         if (draw.white > 0) {
-            if (!tintCanvas || !tintContext) {
-                tintCanvas = document.createElement("canvas");
-                tintContext = tintCanvas.getContext("2d");
-            }
-            if (tintContext) {
-                tintCanvas.width = image.width;
-                tintCanvas.height = image.height;
-                tintContext.imageSmoothingEnabled = false;
-                tintContext.globalCompositeOperation = "source-over";
-                tintContext.drawImage(image, 0, 0);
-                tintContext.globalCompositeOperation = "source-in";
-                tintContext.fillStyle = "#ffffff";
-                tintContext.fillRect(0, 0, image.width, image.height);
-                context.globalCompositeOperation = "source-over";
-                context.globalAlpha = draw.alpha * draw.white;
-                context.drawImage(tintCanvas, -pivotX, -pivotY);
-            }
+            paintSilhouette(context, image, pivotX, pivotY, draw.alpha * draw.white, "#ffffff");
+        }
+        if (draw.cover) {
+            paintSilhouette(context, image, pivotX, pivotY, draw.alpha * draw.cover.amount, draw.cover.color);
         }
 
         context.restore();
     }
+}
+
+function paintSilhouette(
+    context: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    pivotX: number,
+    pivotY: number,
+    alpha: number,
+    color: string,
+): void {
+    if (alpha <= 0) {
+        return;
+    }
+    if (!tintCanvas || !tintContext) {
+        tintCanvas = document.createElement("canvas");
+        tintContext = tintCanvas.getContext("2d");
+    }
+    if (!tintContext) {
+        return;
+    }
+    tintCanvas.width = image.width;
+    tintCanvas.height = image.height;
+    tintContext.imageSmoothingEnabled = false;
+    tintContext.globalCompositeOperation = "source-over";
+    tintContext.drawImage(image, 0, 0);
+    tintContext.globalCompositeOperation = "source-in";
+    tintContext.fillStyle = color;
+    tintContext.fillRect(0, 0, image.width, image.height);
+    context.globalCompositeOperation = "source-over";
+    context.globalAlpha = alpha;
+    context.drawImage(tintCanvas, -pivotX, -pivotY);
 }
