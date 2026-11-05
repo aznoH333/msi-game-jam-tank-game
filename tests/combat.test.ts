@@ -275,6 +275,31 @@ describe("combat loop", () => {
         const heavyHit = heavy.at(0, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(0.25);
         assert.ok(heavyHit.sparks.length > lightHit.sparks.length);
     });
+
+    it("turns a damaged tile white, then fades that back over 50ms", () => {
+        const match = combatMatch(
+            vehicle("Player", [gun(0, 0, 30, 10), battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const aim = match.tile("enemy", 0);
+        match.at(0, "player", { fire: { gun: 0, at: aim } });
+        let hit = false;
+        for (let step = 0; step < 40; step++) {
+            const state = match.run(0.01, 0.01);
+            if (state.enemy.tiles[0].health >= 100) {
+                continue;
+            }
+            assert.equal(state.enemy.tiles[0].flash, 1);
+            assert.equal(state.player.tiles[0].flash, 0);
+            const fading = match.run(0.02, 0.02);
+            assert.ok(Math.abs(fading.enemy.tiles[0].flash - 0.6) < 1e-6);
+            const gone = match.run(0.03, 0.03);
+            assert.equal(gone.enemy.tiles[0].flash, 0);
+            hit = true;
+            break;
+        }
+        assert.equal(hit, true);
+    });
 });
 
 function chanceOverclock(kind: "jamChance" | "failChance"): PlacedTile["overclocks"][number] {

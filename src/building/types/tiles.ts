@@ -136,5 +136,10 @@ export interface BaseTurret {
     explosionRadius: number;
 
     /** how should the projectile behave */
-    projectileType: ProjectileType
+    projectileType: ProjectileType;
+
+
+    /** audio */
+    firingSound: string;
+    impactSound: string;
 }

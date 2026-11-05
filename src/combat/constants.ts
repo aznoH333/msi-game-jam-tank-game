@@ -55,6 +55,9 @@ export const SPARK_MAX_PER_HIT = 24;
 /** How long a spark stays visible, in seconds. */
 export const SPARK_DURATION = 0.4;
 
+/** A hit turns its tile white, then fades back to the normal color over this many seconds. */
+export const HIT_FLASH_DURATION = 0.05;
+
 /** Outward speed of a spark, in tiles per second. */
 export const SPARK_MIN_SPEED = 8;
 export const SPARK_MAX_SPEED = 16;

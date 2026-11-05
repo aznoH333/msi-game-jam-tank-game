@@ -10,6 +10,7 @@ import {
     EXPLOSION_DURATION,
     FAIL_DAMAGE_OF_MAX_HEALTH,
     FAIL_EXPLOSION_RADIUS,
+    HIT_FLASH_DURATION,
     JAM_ENERGY_MULTIPLIER,
     REPAIR_COOLDOWN,
     REPAIR_DURATION,
@@ -146,6 +147,8 @@ export interface CombatTileState {
     y: number;
     health: number;
     maxHealth: number;
+    /** 1 is full white, 0 is the tile's normal color. */
+    flash: number;
 }
 
 export interface CombatSideState {
@@ -213,6 +216,7 @@ function createCombatant(vehicle: BaseVehicle, control: CombatControl): Combatan
         tiles: base.tiles.map((tile) => ({
             tile,
             health: tile.base.health,
+            hitFlash: 0,
         })),
         power: getTotalPowerCapacity(base),
     };
@@ -288,6 +292,7 @@ function sideState(combatant: Combatant): CombatSideState {
             y: part.tile.y,
             health: part.health,
             maxHealth: part.tile.base.health,
+            flash: part.hitFlash <= 0 ? 0 : Math.min(1, part.hitFlash / HIT_FLASH_DURATION),
         })),
     };
 }
@@ -648,9 +653,12 @@ function spawnSparks(battle: Battle, x: number, y: number, damage: number): void
 /** Wipe whatever is left of a beaten tank and burst it from the center. */
 function destroyDefeatedTank(battle: Battle, combatant: Combatant, camera: CombatCamera | null): void {
     for (const part of combatant.instance.tiles) {
-        if (part.health > 0 && camera) {
-            const origin = tileToWorld(camera, part.tile.x, part.tile.y, part.tile.base.width, part.tile.base.height);
-            spawnSparks(battle, origin.x, origin.y, part.health);
+        if (part.health > 0) {
+            flashTile(part);
+            if (camera) {
+                const origin = tileToWorld(camera, part.tile.x, part.tile.y, part.tile.base.width, part.tile.base.height);
+                spawnSparks(battle, origin.x, origin.y, part.health);
+            }
         }
         part.health = 0;
     }
@@ -709,6 +717,9 @@ function detonate(
                 }
                 const dealt = Math.min(part.health, boom.damage * falloff);
                 part.health -= dealt;
+                if (dealt > 0) {
+                    flashTile(part);
+                }
                 const origin = tileToWorld(
                     target.camera,
                     tile.x,
@@ -771,8 +782,22 @@ export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehic
     };
 }
 
+function flashTile(part: TileInstance): void {
+    part.hitFlash = HIT_FLASH_DURATION;
+}
+
+function ageHitFlashes(battle: Battle, dt: number): void {
+    for (const combatant of [battle.player, battle.enemy]) {
+        for (const part of combatant.instance.tiles) {
+            const next = part.hitFlash - dt;
+            part.hitFlash = next <= 1e-8 ? 0 : next;
+        }
+    }
+}
+
 /** Advance the fight by `dt` seconds. Orders are ignored once someone has lost. */
 export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): void {
+    ageHitFlashes(battle, dt);
     const view = battleView(battle);
     const fightOver = battle.result !== null;
     battle.player.repairCooldown = Math.max(0, battle.player.repairCooldown - dt);

@@ -17,7 +17,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 projectileSprite: "weapons/bullet",
                 spriteCenterX: 4.5,
                 spriteCenterY: 10,
-                accuracy: 2,
+                accuracy: 1,
                 damagePerShot: 10,
                 powerPerShot: 3,
                 salvoCount: 5,
@@ -26,6 +26,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 0.4,
                 projectileSpeed: 95,
                 projectileType: "direct",
+                firingSound: "weapons/machine_gun",
+                impactSound: "weapons/metal_impact",
 
                 overClocks: [
                     {
@@ -87,6 +89,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 2.5,
                 projectileSpeed: 85,
                 projectileType: "direct",
+                firingSound: "weapons/cannon_small",
+                impactSound: "weapons/explosion_small",
 
                 overClocks: [
                     {
@@ -136,6 +140,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 3.5,
                 projectileSpeed: 40,
                 projectileType: "mortar",
+                firingSound: "weapons/cannon_small",
+                impactSound: "weapons/explosion",
 
                 overClocks: [
                     {
@@ -184,6 +190,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 4.5,
                 projectileSpeed: 85,
                 projectileType: "direct",
+                firingSound: "weapons/cannon",
+                impactSound: "weapons/explosion",
 
                 overClocks: [
                     {
@@ -233,6 +241,8 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                 explosionRadius: 3.5,
                 projectileSpeed: 65,
                 projectileType: "mortar",
+                firingSound: "weapons/cannon",
+                impactSound: "weapons/explosion",
 
                 overClocks: [
                     {

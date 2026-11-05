@@ -21,6 +21,13 @@ export interface Triangle3D {
     b: Vec3;
     c: Vec3;
     color: string;
+    /** Sprite mapped with `uvA`/`uvB`/`uvC`. Untextured triangles ignore the UVs. */
+    sprite?: string;
+    uvA?: readonly [number, number];
+    uvB?: readonly [number, number];
+    uvC?: readonly [number, number];
+    /** Repeat the texture along V. U stays clamped, so a 0–1 span keeps its edge pixels. */
+    wrapV?: boolean;
 }
 
 /** Sprite quad that always faces the camera. `position` is the center. */
@@ -44,6 +51,8 @@ export interface Scene3D {
     camera: Camera3D;
     triangles: Triangle3D[];
     background: string;
+    /** Screen-space color behind the world, from the top of the viewport to the bottom. */
+    sky?: { top: string; bottom: string };
     billboards?: Billboard3D[];
     /** Top half of the viewport is sky, bottom half is ground, both behind the triangles. */
     horizon?: {
@@ -83,9 +92,13 @@ let groundEye: WebGLUniformLocation | null = null;
 let groundHalfTan: WebGLUniformLocation | null = null;
 let groundAspect: WebGLUniformLocation | null = null;
 let groundView: WebGLUniformLocation | null = null;
+let skyProgram: WebGLProgram | null = null;
+let skyTop: WebGLUniformLocation | null = null;
+let skyBottom: WebGLUniformLocation | null = null;
 let spriteProgram: WebGLProgram | null = null;
 let spriteViewProj: WebGLUniformLocation | null = null;
 let spriteSampler: WebGLUniformLocation | null = null;
+let spriteRepeat: WebGLUniformLocation | null = null;
 let spriteFog = emptyFogUniforms();
 
 interface FogUniforms {
@@ -103,7 +116,9 @@ function emptyFogUniforms(): FogUniforms {
 let triBuffer: WebGLBuffer | null = null;
 let groundBuffer: WebGLBuffer | null = null;
 let spriteBuffer: WebGLBuffer | null = null;
+let texBuffer: WebGLBuffer | null = null;
 let triData = new Float32Array(4096);
+let texData = new Float32Array(4096);
 let uploadedTriangles: Triangle3D[] | null = null;
 const spriteData = new Float32Array(30);
 const viewProj = new Float32Array(16);
@@ -177,6 +192,25 @@ void main() {
 }
 `;
 
+const SKY_VS = `
+attribute vec2 a_position;
+varying float v_y;
+void main() {
+    v_y = a_position.y * 0.5 + 0.5;
+    gl_Position = vec4(a_position, 1.0, 1.0);
+}
+`;
+
+const SKY_FS = `
+precision mediump float;
+uniform vec3 u_top;
+uniform vec3 u_bottom;
+varying float v_y;
+void main() {
+    gl_FragColor = vec4(mix(u_bottom, u_top, v_y), 1.0);
+}
+`;
+
 const SPRITE_VS = `
 attribute vec3 a_position;
 attribute vec2 a_uv;
@@ -193,11 +227,13 @@ void main() {
 const SPRITE_FS = `
 precision mediump float;
 uniform sampler2D u_texture;
+uniform float u_repeatV;
 varying vec2 v_uv;
 varying vec3 v_world;
 ${FOG_SNIPPET}
 void main() {
-    vec4 color = texture2D(u_texture, v_uv);
+    float v = u_repeatV > 0.5 ? fract(v_uv.y) : v_uv.y;
+    vec4 color = texture2D(u_texture, vec2(v_uv.x, v));
     if (color.a <= 0.5) discard;
     float dist = distance(v_world.xz, u_camera);
     gl_FragColor = vec4(applyFog(color.rgb, dist), 1.0);
@@ -236,8 +272,30 @@ export function render3D(): void {
     gpu.disable(gpu.SCISSOR_TEST);
 }
 
+export interface PlaneTexture {
+    sprite: string;
+    /** UV at the (-x, -z) corner and the (+x, +z) corner. */
+    u0: number;
+    v0: number;
+    u1: number;
+    v1: number;
+}
+
+/** One copy of a facade. Height is measured down from the top of the box. */
+export interface FaceTexture {
+    sprite: string;
+    width: number;
+    height: number;
+}
+
 /** Horizontal quad on the XZ plane, centered on `center`. */
-export function planeTriangles(center: Vec3, width: number, depth: number, color: string): Triangle3D[] {
+export function planeTriangles(
+    center: Vec3,
+    width: number,
+    depth: number,
+    color: string,
+    texture?: PlaneTexture,
+): Triangle3D[] {
     const hx = width / 2;
     const hz = depth / 2;
     const y = center.y;
@@ -245,14 +303,19 @@ export function planeTriangles(center: Vec3, width: number, depth: number, color
     const b = { x: center.x + hx, y, z: center.z - hz };
     const c = { x: center.x + hx, y, z: center.z + hz };
     const d = { x: center.x - hx, y, z: center.z + hz };
+    const uvA: readonly [number, number] = [texture?.u0 ?? 0, texture?.v0 ?? 0];
+    const uvB: readonly [number, number] = [texture?.u1 ?? 1, texture?.v0 ?? 0];
+    const uvC: readonly [number, number] = [texture?.u1 ?? 1, texture?.v1 ?? 1];
+    const uvD: readonly [number, number] = [texture?.u0 ?? 0, texture?.v1 ?? 1];
+    const sprite = texture?.sprite;
     return [
-        { a, b, c, color },
-        { a, b: c, c: d, color },
+        { a, b, c, color, sprite, uvA, uvB, uvC },
+        { a, b: c, c: d, color, sprite, uvA, uvB: uvC, uvC: uvD },
     ];
 }
 
 /** Axis-aligned box. `size` is the full width, height, and depth. Faces are shaded from `color`. */
-export function boxTriangles(center: Vec3, size: Vec3, color: string): Triangle3D[] {
+export function boxTriangles(center: Vec3, size: Vec3, color: string, facade?: FaceTexture): Triangle3D[] {
     const hx = size.x / 2;
     const hy = size.y / 2;
     const hz = size.z / 2;
@@ -263,18 +326,48 @@ export function boxTriangles(center: Vec3, size: Vec3, color: string): Triangle3
     const z0 = center.z - hz;
     const z1 = center.z + hz;
     const point = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
-    const faces: { shade: number; quad: [Vec3, Vec3, Vec3, Vec3] }[] = [
-        { shade: 1.2, quad: [point(x0, y1, z1), point(x1, y1, z1), point(x1, y1, z0), point(x0, y1, z0)] },
-        { shade: 0.78, quad: [point(x0, y0, z1), point(x1, y0, z1), point(x1, y1, z1), point(x0, y1, z1)] },
-        { shade: 0.5, quad: [point(x1, y0, z0), point(x0, y0, z0), point(x0, y1, z0), point(x1, y1, z0)] },
-        { shade: 0.95, quad: [point(x1, y0, z1), point(x1, y0, z0), point(x1, y1, z0), point(x1, y1, z1)] },
-        { shade: 0.62, quad: [point(x0, y0, z0), point(x0, y0, z1), point(x0, y1, z1), point(x0, y1, z0)] },
+    const along = (value: number, origin: number): number => facade ? (value - origin) / facade.width : 0;
+    const down = (y: number): number => facade ? (y1 - y) / facade.height : 0;
+    const wall = (y: number, horizontal: number): readonly [number, number] => [horizontal, down(y)];
+    const blank: readonly [number, number] = [0, 0];
+    const faces: { shade: number; quad: [Vec3, Vec3, Vec3, Vec3]; uv: readonly [readonly [number, number], readonly [number, number], readonly [number, number], readonly [number, number]] }[] = [
+        {
+            shade: 1.2,
+            quad: [point(x0, y1, z1), point(x1, y1, z1), point(x1, y1, z0), point(x0, y1, z0)],
+            uv: [blank, blank, blank, blank],
+        },
+        {
+            shade: 0.78,
+            quad: [point(x0, y0, z1), point(x1, y0, z1), point(x1, y1, z1), point(x0, y1, z1)],
+            uv: [wall(y0, along(x0, x0)), wall(y0, along(x1, x0)), wall(y1, along(x1, x0)), wall(y1, along(x0, x0))],
+        },
+        {
+            shade: 0.5,
+            quad: [point(x1, y0, z0), point(x0, y0, z0), point(x0, y1, z0), point(x1, y1, z0)],
+            uv: [wall(y0, along(x1, x0)), wall(y0, along(x0, x0)), wall(y1, along(x0, x0)), wall(y1, along(x1, x0))],
+        },
+        {
+            shade: 0.95,
+            quad: [point(x1, y0, z1), point(x1, y0, z0), point(x1, y1, z0), point(x1, y1, z1)],
+            uv: [wall(y0, along(z1, z0)), wall(y0, along(z0, z0)), wall(y1, along(z0, z0)), wall(y1, along(z1, z0))],
+        },
+        {
+            shade: 0.62,
+            quad: [point(x0, y0, z0), point(x0, y0, z1), point(x0, y1, z1), point(x0, y1, z0)],
+            uv: [wall(y0, along(z0, z0)), wall(y0, along(z1, z0)), wall(y1, along(z1, z0)), wall(y1, along(z0, z0))],
+        },
     ];
     const triangles: Triangle3D[] = [];
-    for (const face of faces) {
+    for (const [index, face] of faces.entries()) {
         const [a, b, c, d] = face.quad;
+        const [uvA, uvB, uvC, uvD] = face.uv;
+        const textured = facade !== undefined && index > 0;
         const faceColor = scaleHex(color, face.shade);
-        triangles.push({ a, b, c, color: faceColor }, { a, b: c, c: d, color: faceColor });
+        const sprite = textured ? facade.sprite : undefined;
+        triangles.push(
+            { a, b, c, color: faceColor, sprite, uvA, uvB, uvC, wrapV: textured },
+            { a, b: c, c: d, color: faceColor, sprite, uvA, uvB: uvC, uvC: uvD, wrapV: textured },
+        );
     }
     return triangles;
 }
@@ -298,17 +391,39 @@ function paintScene(gpu: WebGLRenderingContext, context: CanvasRenderingContext2
     const clear = parseColor(scene.fog?.color ?? scene.horizon?.sky ?? scene.background);
     gpu.clearColor(clear[0] / 255, clear[1] / 255, clear[2] / 255, 1);
     gpu.clear(gpu.COLOR_BUFFER_BIT | gpu.DEPTH_BUFFER_BIT);
+    if (scene.sky) {
+        paintSky(gpu, scene);
+    }
     if (scene.horizon) {
         paintHorizon(gpu, scene, vx, vy, vw, vh);
-        gpu.enable(gpu.DEPTH_TEST);
-        gpu.depthMask(true);
     }
+    gpu.enable(gpu.DEPTH_TEST);
+    gpu.depthMask(true);
 
     setViewProjection(scene.camera, vw / vh);
     paintTriangles(gpu, scene);
     paintBillboards(gpu, scene);
     // The 2D canvas sits on top. Leave this rectangle transparent so the WebGL frame shows through.
     context.clearRect(view.x, view.y, view.width, view.height);
+}
+
+function paintSky(gpu: WebGLRenderingContext, scene: Scene3D): void {
+    const sky = scene.sky;
+    if (!sky || !groundBuffer) {
+        return;
+    }
+    gpu.disable(gpu.DEPTH_TEST);
+    gpu.depthMask(false);
+    gpu.useProgram(skyProgram);
+    const [topRed, topGreen, topBlue] = parseColor(sky.top);
+    const [bottomRed, bottomGreen, bottomBlue] = parseColor(sky.bottom);
+    gpu.uniform3f(skyTop, topRed / 255, topGreen / 255, topBlue / 255);
+    gpu.uniform3f(skyBottom, bottomRed / 255, bottomGreen / 255, bottomBlue / 255);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
+    gpu.enableVertexAttribArray(0);
+    gpu.disableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 2, gpu.FLOAT, false, 0, 0);
+    gpu.drawArrays(gpu.TRIANGLES, 0, HORIZON_VERTS.length / 2);
 }
 
 function paintHorizon(gpu: WebGLRenderingContext, scene: Scene3D, vx: number, vy: number, vw: number, vh: number): void {
@@ -339,6 +454,21 @@ function paintHorizon(gpu: WebGLRenderingContext, scene: Scene3D, vx: number, vy
 
 function paintTriangles(gpu: WebGLRenderingContext, scene: Scene3D): void {
     const triangles = scene.triangles;
+    let textured = false;
+    for (const triangle of triangles) {
+        if (triangle.sprite) {
+            textured = true;
+            break;
+        }
+    }
+    const solid = textured ? triangles.filter((triangle) => !triangle.sprite) : triangles;
+    paintSolidTriangles(gpu, scene, solid);
+    if (textured) {
+        paintTexturedTriangles(gpu, scene, triangles);
+    }
+}
+
+function paintSolidTriangles(gpu: WebGLRenderingContext, scene: Scene3D, triangles: Triangle3D[]): void {
     if (triangles.length === 0 || !triBuffer) {
         return;
     }
@@ -375,6 +505,72 @@ function paintTriangles(gpu: WebGLRenderingContext, scene: Scene3D): void {
     gpu.drawArrays(gpu.TRIANGLES, 0, triangles.length * 3);
 }
 
+function paintTexturedTriangles(gpu: WebGLRenderingContext, scene: Scene3D, triangles: Triangle3D[]): void {
+    if (!texBuffer) {
+        return;
+    }
+    const groups = new Map<string, { sprite: string; wrapV: boolean; triangles: Triangle3D[] }>();
+    for (const triangle of triangles) {
+        if (!triangle.sprite) {
+            continue;
+        }
+        const wrapV = triangle.wrapV === true;
+        const key = `${triangle.sprite}:${wrapV ? 1 : 0}`;
+        let group = groups.get(key);
+        if (!group) {
+            group = { sprite: triangle.sprite, wrapV, triangles: [] };
+            groups.set(key, group);
+        }
+        group.triangles.push(triangle);
+    }
+    if (groups.size === 0) {
+        return;
+    }
+    gpu.useProgram(spriteProgram);
+    gpu.uniformMatrix4fv(spriteViewProj, false, viewProj);
+    bindFog(gpu, spriteFog, scene.fog, scene.camera);
+    gpu.uniform1i(spriteSampler, 0);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, texBuffer);
+    gpu.enableVertexAttribArray(0);
+    gpu.enableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 3, gpu.FLOAT, false, 20, 0);
+    gpu.vertexAttribPointer(1, 2, gpu.FLOAT, false, 20, 12);
+    gpu.activeTexture(gpu.TEXTURE0);
+    for (const group of groups.values()) {
+        const texture = spriteTexture(gpu, group.sprite);
+        if (!texture) {
+            continue;
+        }
+        const floats = group.triangles.length * 15;
+        if (texData.length < floats) {
+            let size = texData.length;
+            while (size < floats) {
+                size *= 2;
+            }
+            texData = new Float32Array(size);
+        }
+        let offset = 0;
+        for (const triangle of group.triangles) {
+            offset = writeTexVertex(offset, triangle.a, triangle.uvA);
+            offset = writeTexVertex(offset, triangle.b, triangle.uvB);
+            offset = writeTexVertex(offset, triangle.c, triangle.uvC);
+        }
+        gpu.bufferData(gpu.ARRAY_BUFFER, texData.subarray(0, offset), gpu.DYNAMIC_DRAW);
+        gpu.uniform1f(spriteRepeat, group.wrapV ? 1 : 0);
+        gpu.bindTexture(gpu.TEXTURE_2D, texture);
+        gpu.drawArrays(gpu.TRIANGLES, 0, group.triangles.length * 3);
+    }
+}
+
+function writeTexVertex(offset: number, point: Vec3, uv: readonly [number, number] | undefined): number {
+    texData[offset] = point.x;
+    texData[offset + 1] = point.y;
+    texData[offset + 2] = point.z;
+    texData[offset + 3] = uv?.[0] ?? 0;
+    texData[offset + 4] = uv?.[1] ?? 0;
+    return offset + 5;
+}
+
 function writeVertex(offset: number, point: Vec3, red: number, green: number, blue: number): number {
     triData[offset] = point.x;
     triData[offset + 1] = point.y;
@@ -395,6 +591,7 @@ function paintBillboards(gpu: WebGLRenderingContext, scene: Scene3D): void {
     gpu.uniformMatrix4fv(spriteViewProj, false, viewProj);
     bindFog(gpu, spriteFog, scene.fog, scene.camera);
     gpu.uniform1i(spriteSampler, 0);
+    gpu.uniform1f(spriteRepeat, 0);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, spriteBuffer);
     gpu.enableVertexAttribArray(0);
     gpu.enableVertexAttribArray(1);
@@ -532,14 +729,19 @@ function initPrograms(gpu: WebGLRenderingContext): void {
     groundHalfTan = gpu.getUniformLocation(groundProgram, "u_halfTan");
     groundAspect = gpu.getUniformLocation(groundProgram, "u_aspect");
     groundView = gpu.getUniformLocation(groundProgram, "u_view");
+    skyProgram = linkProgram(gpu, SKY_VS, SKY_FS, ["a_position"]);
+    skyTop = gpu.getUniformLocation(skyProgram, "u_top");
+    skyBottom = gpu.getUniformLocation(skyProgram, "u_bottom");
     spriteProgram = linkProgram(gpu, SPRITE_VS, SPRITE_FS, ["a_position", "a_uv"]);
     spriteViewProj = gpu.getUniformLocation(spriteProgram, "u_viewProj");
     spriteSampler = gpu.getUniformLocation(spriteProgram, "u_texture");
+    spriteRepeat = gpu.getUniformLocation(spriteProgram, "u_repeatV");
     spriteFog = fogLocations(gpu, spriteProgram);
 
     triBuffer = gpu.createBuffer();
     groundBuffer = gpu.createBuffer();
     spriteBuffer = gpu.createBuffer();
+    texBuffer = gpu.createBuffer();
     gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);
     gpu.bufferData(gpu.ARRAY_BUFFER, HORIZON_VERTS, gpu.STATIC_DRAW);
 }

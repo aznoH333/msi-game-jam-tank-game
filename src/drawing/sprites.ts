@@ -22,6 +22,7 @@ type QueuedSprite = {
     originY: number | null;
     alpha: number;
     color?: string;
+    white: number;
     clip: DrawClip | null;
 };
 
@@ -65,6 +66,8 @@ export interface DrawCommand {
     alpha?: number;
     /** Recolors the sprite while keeping its shape. */
     color?: string;
+    /** Covers the sprite with solid white. 0 leaves it alone, 1 hides the normal color. */
+    white?: number;
 }
 
 export function drawSprite({
@@ -79,6 +82,7 @@ export function drawSprite({
     originY,
     alpha = 1,
     color,
+    white = 0,
 }: DrawCommand) {
     queuedSprites.push({
         sprite,
@@ -92,6 +96,7 @@ export function drawSprite({
         originY: originY ?? null,
         alpha,
         color,
+        white,
         clip: getDrawClip(),
     });
 }
@@ -164,6 +169,26 @@ export function renderSprites(): void {
             }
         } else {
             context.drawImage(image, -pivotX, -pivotY);
+        }
+
+        if (draw.white > 0) {
+            if (!tintCanvas || !tintContext) {
+                tintCanvas = document.createElement("canvas");
+                tintContext = tintCanvas.getContext("2d");
+            }
+            if (tintContext) {
+                tintCanvas.width = image.width;
+                tintCanvas.height = image.height;
+                tintContext.imageSmoothingEnabled = false;
+                tintContext.globalCompositeOperation = "source-over";
+                tintContext.drawImage(image, 0, 0);
+                tintContext.globalCompositeOperation = "source-in";
+                tintContext.fillStyle = "#ffffff";
+                tintContext.fillRect(0, 0, image.width, image.height);
+                context.globalCompositeOperation = "source-over";
+                context.globalAlpha = draw.alpha * draw.white;
+                context.drawImage(tintCanvas, -pivotX, -pivotY);
+            }
         }
 
         context.restore();

@@ -3,6 +3,7 @@ import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
 import { drawRect, getDrawClip, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
+import { HIT_FLASH_DURATION } from "./constants";
 import type { VehicleInstance } from "./types/vehicleInstance";
 import {
     combatTileCenter,
@@ -101,8 +102,9 @@ export function drawCombatVehicle(
     }
     instance.tiles.forEach((part, index) => {
         const tile = part.tile;
+        const flash = tileFlash(part.hitFlash);
         if (part.health <= 0) {
-            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted, shakeX, shakeY);
+            drawDestroyedTile(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted, shakeX, shakeY, flash);
             return;
         }
         const maxHealth = tile.base.health;
@@ -121,14 +123,14 @@ export function drawCombatVehicle(
             y: drawTop,
             width,
             height,
-            color: scaleColor("#2e3648", shade),
+            color: scaleColor("#2e3648", shade, flash),
         });
         strokeRect({
             x: left + 0.5,
             y: drawTop + 0.5,
             width,
             height,
-            color: scaleColor("#3a4254", shade),
+            color: scaleColor("#3a4254", shade, flash),
         });
         const center = combatTileCenter(layout, tile.x, tile.y, tile.base.width, tile.base.height, inverted);
         center.x += shakeX;
@@ -140,6 +142,7 @@ export function drawCombatVehicle(
             scaleX: scale,
             scaleY: inverted ? -scale : scale,
             color: damageTint,
+            white: flash,
             zIndex: 1,
         });
         if (tile.base.turret) {
@@ -153,6 +156,7 @@ export function drawCombatVehicle(
                 originX: tile.base.turret.spriteCenterX,
                 originY: tile.base.turret.spriteCenterY,
                 color: damageTint,
+                white: flash,
                 zIndex: 2,
             });
         }
@@ -210,6 +214,7 @@ function drawDestroyedTile(
     inverted: boolean,
     shakeX: number,
     shakeY: number,
+    flash: number,
 ): void {
     const scale = layout.cell / TILE_SIZE_PX;
     for (let y = 0; y < height; y++) {
@@ -223,16 +228,26 @@ function drawDestroyedTile(
                 y: center.y,
                 scaleX: scale,
                 scaleY: inverted ? -scale : scale,
+                white: flash,
                 zIndex: 1,
             });
         }
     }
 }
 
-function scaleColor(hex: string, factor: number): string {
+/** 1 on the frame a tile is hit, then down to 0 over the flash. */
+function tileFlash(hitFlash: number): number {
+    if (hitFlash <= 0) {
+        return 0;
+    }
+    return Math.min(1, hitFlash / HIT_FLASH_DURATION);
+}
+
+function scaleColor(hex: string, factor: number, white = 0): string {
     const rgb = Number.parseInt(hex.slice(1), 16);
-    const red = Math.round(((rgb >> 16) & 255) * factor);
-    const green = Math.round(((rgb >> 8) & 255) * factor);
-    const blue = Math.round((rgb & 255) * factor);
+    const channel = (value: number) => Math.round(value * factor + (255 - value * factor) * white);
+    const red = channel((rgb >> 16) & 255);
+    const green = channel((rgb >> 8) & 255);
+    const blue = channel(rgb & 255);
     return `rgb(${red}, ${green}, ${blue})`;
 }

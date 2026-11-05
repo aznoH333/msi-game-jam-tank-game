@@ -2,7 +2,7 @@ import { placedWeaponCount } from "../building/vehicleRules";
 import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
-import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type Triangle3D, type Vec3 } from "../drawing/3d";
+import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type FaceTexture, type Triangle3D, type Vec3 } from "../drawing/3d";
 import { drawText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
 import { chooseExploration, directorAttempt, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
@@ -27,7 +27,19 @@ const EVENT_WIDTH = 6;
 const EVENT_HEIGHT = 4.6;
 const EVENT_CENTER_Y = 3.4;
 const EVENT_SPRITE = "world/events/debug_event";
-const BUILDING_COLORS = ["#8d939c", "#6e757f", "#a7adb6", "#5c636c"];
+const SKY_TOP = "#5c68e0";
+const SKY_BOTTOM = "#b9bffb";
+const ROAD_SPRITE = "world/textures/road";
+const ROAD_TEX_WIDTH = 200;
+const ROAD_TEX_HEIGHT = 63;
+const BUILDING_SPRITES = [
+    "world/textures/buildings_0001",
+    "world/textures/buildings_0002",
+    "world/textures/buildings_0003",
+];
+const BUILDING_TEX_WIDTH = 112;
+const BUILDING_TEX_HEIGHT = 178;
+const ROOF_COLOR = "#5daf8d";
 
 let travelEvent = -1;
 let travelAttempt = -1;
@@ -60,7 +72,8 @@ export function updateTravel(): void {
     const nextEvent = getNextEventType();
     drawScene3D({
         viewport: cityView,
-        background: "#171d28",
+        background: SKY_BOTTOM,
+        sky: { top: SKY_TOP, bottom: SKY_BOTTOM },
         camera: {
             position: { x: 0, y: CAMERA_HEIGHT, z: cameraZ },
             yaw: 0,
@@ -258,6 +271,7 @@ function presentationVehicle(vehicle: BaseVehicle): VehicleInstance {
         tiles: vehicle.tiles.map((tile) => ({
             tile,
             health: tile.base.health,
+            hitFlash: 0,
         })),
         power: getTotalPowerCapacity(vehicle),
     };
@@ -266,22 +280,42 @@ function presentationVehicle(vehicle: BaseVehicle): VehicleInstance {
 function streetTriangles(cameraZ: number): Triangle3D[] {
     const triangles: Triangle3D[] = [];
     const horizon = Math.sqrt(CAMERA_HEIGHT / STREET_CURVE);
+    const streetWidth = STREET_HALF * 2;
+    const roadRepeat = streetWidth * (ROAD_TEX_HEIGHT / ROAD_TEX_WIDTH);
     const stripDepth = 1.6;
-    for (let ahead = 0.4; ahead < horizon * 1.35; ahead += stripDepth) {
+    const zStart = cameraZ + 0.4;
+    const zEnd = cameraZ + horizon * 1.35;
+    let z = zStart;
+    while (z < zEnd) {
+        const tileIndex = Math.floor(z / roadRepeat);
+        const tileEnd = (tileIndex + 1) * roadRepeat;
+        const next = Math.min(zEnd, tileEnd, z + stripDepth);
+        if (next <= z) {
+            break;
+        }
+        const depth = next - z;
         triangles.push(...planeTriangles(
-            { x: 0, y: 0, z: cameraZ + ahead + stripDepth / 2 },
-            64,
-            stripDepth,
+            { x: 0, y: 0, z: z + depth / 2 },
+            streetWidth,
+            depth,
             "#3c4452",
+            {
+                sprite: ROAD_SPRITE,
+                u0: 0,
+                v0: z / roadRepeat - tileIndex,
+                u1: 1,
+                v1: next / roadRepeat - tileIndex,
+            },
         ));
+        z = next;
     }
 
     const first = Math.floor((cameraZ - BLOCK_DEPTH) / BLOCK_DEPTH);
     const last = Math.ceil((cameraZ + horizon * 3.5) / BLOCK_DEPTH);
     for (let index = first; index <= last; index++) {
-        const z = index * BLOCK_DEPTH + BLOCK_DEPTH / 2;
-        pushBuilding(triangles, index * 13 + 7, -1, z);
-        pushBuilding(triangles, index * 13 + 19, 1, z);
+        const blockZ = index * BLOCK_DEPTH + BLOCK_DEPTH / 2;
+        pushBuilding(triangles, index * 13 + 7, -1, blockZ);
+        pushBuilding(triangles, index * 13 + 19, 1, blockZ);
     }
     return bendTriangles(triangles, cameraZ);
 }
@@ -289,22 +323,40 @@ function streetTriangles(cameraZ: number): Triangle3D[] {
 /** Each row is one solid run of blocks. Depth matches the step, so neighboring faces meet. */
 function pushBuilding(triangles: Triangle3D[], seed: number, side: number, z: number): void {
     const variety = Math.abs(seed);
-    const height = 2.2 + (variety % 6) * 1.35;
+    const height = 7 + (mixHash(seed) % 20) / 20 * 4;
     const thickness = 4.2 + (variety % 4) * 1.1;
+    const sprite = BUILDING_SPRITES[mixHash(seed + 17) % BUILDING_SPRITES.length];
     triangles.push(...boxTriangles(
         { x: side * (STREET_HALF + thickness / 2), y: height / 2, z },
         { x: thickness, y: height, z: BLOCK_DEPTH },
-        BUILDING_COLORS[variety % BUILDING_COLORS.length],
+        ROOF_COLOR,
+        facade(sprite),
     ));
+}
+
+/** One facade across the street face. Taller blocks repeat downward from that top edge. */
+function facade(sprite: string): FaceTexture {
+    return {
+        sprite,
+        width: BLOCK_DEPTH,
+        height: BLOCK_DEPTH * (BUILDING_TEX_HEIGHT / BUILDING_TEX_WIDTH),
+    };
+}
+
+function mixHash(n: number): number {
+    let h = Math.imul(n | 0, 0x9E3779B1);
+    h = Math.imul(h ^ (h >>> 16), 0x85EBCA77);
+    h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35);
+    return (h ^ (h >>> 16)) >>> 0;
 }
 
 /** Drop the world by distance ahead of the camera, steep enough that far blocks sink past the horizon. */
 function bendTriangles(triangles: Triangle3D[], cameraZ: number): Triangle3D[] {
     return triangles.map((triangle) => ({
+        ...triangle,
         a: bend(triangle.a, cameraZ),
         b: bend(triangle.b, cameraZ),
         c: bend(triangle.c, cameraZ),
-        color: triangle.color,
     }));
 }
 
