@@ -18,12 +18,14 @@
 
 
 # short term goals.
-- [X] impl new tiles and variations
-- [X] better explosion
-- [X] spark effects
-- [X] impl tracks
-- [X] impl ground sprite
-- [ ] travel buildings and floor
-- [ ] travel icons
 - [ ] talking guy
-- [ ] guy dialog
+- [ ] add button and gui noises
+- [ ] rebalance tiles again
+- [ ] overworld loot
+- [ ] nuclear reactor
+- [ ] overclock select indicator
+- [ ] overclock sound
+- [ ] weapon ready sound
+- [ ] weapon reload bars
+- [ ] repair sound
+- [ ] blinking indicator for shooting and repairing

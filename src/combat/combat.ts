@@ -458,6 +458,8 @@ export function updateCombat(): void {
     );
     const playerEnergy = energyBudget(player.instance);
     const enemyEnergy = energyBudget(enemy.instance);
+    const playerHealth = healthRatio(player.instance);
+    const enemyHealth = healthRatio(enemy.instance);
     drawViewEnergy(playerView, player.instance.power, playerEnergy.capacity, playerEnergy.generation);
     drawViewEnergy(enemyView, enemy.instance.power, enemyEnergy.capacity, enemyEnergy.generation);
     drawAbilityBarMoney(
@@ -465,9 +467,12 @@ export function updateCombat(): void {
         state.playerData.overclockModules,
         placedWeaponCount(state.playerData.vehicle),
         state.playerData.vehicleWeaponSlots,
+        {
+            healthRatio: playerHealth ?? 1,
+            shakeX: playerViewShake.x,
+            shakeY: playerViewShake.y,
+        },
     );
-    const playerHealth = healthRatio(player.instance);
-    const enemyHealth = healthRatio(enemy.instance);
     drawHealthBar(playerView.x + 24, playerView.y + 52, 240, playerHealth ?? 0);
     drawHealthBar(enemyView.x + 24, enemyView.y + 52, 240, enemyHealth ?? 0);
 

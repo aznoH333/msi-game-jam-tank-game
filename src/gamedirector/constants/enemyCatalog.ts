@@ -24,19 +24,25 @@ export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
     {
         fileName: "small_1.json",
         earliestAppearance: 0,
-        latestAppearance: 99,
+        latestAppearance: 4,
         moneyDropped: 3000,
 
     },
     {
         fileName: "small_2.json",
         earliestAppearance: 1,
-        latestAppearance: 99,
+        latestAppearance: 4,
         moneyDropped: 3500,
     },
     {
         fileName: "medium_1.json",
         earliestAppearance: 3,
+        latestAppearance: 99,
+        moneyDropped: 5000
+    },
+    {
+        fileName: "heavy_1.json",
+        earliestAppearance: 5,
         latestAppearance: 99,
         moneyDropped: 5000
     }

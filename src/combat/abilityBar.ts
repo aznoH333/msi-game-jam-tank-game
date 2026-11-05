@@ -4,6 +4,7 @@ import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
+import { drawDriverPortrait, type DriverPortraitState } from "../ui/driverPortrait";
 import { drawModuleReadout, drawMoneyReadout, drawWeaponSlotReadout } from "../ui/moneyReadout";
 
 export { ABILITY_BAR_WIDTH };
@@ -261,10 +262,18 @@ export function drawViewEnergy(
 }
 
 /** Money at the bottom of the left sidebar, with modules and weapon slots stacked above it. */
-export function drawAbilityBarMoney(money: number, modules: number, weaponsPlaced: number, weaponSlots: number): void {
+export function drawAbilityBarMoney(
+    money: number,
+    modules: number,
+    weaponsPlaced: number,
+    weaponSlots: number,
+    driver?: DriverPortraitState,
+): void {
     const width = ABILITY_BAR_WIDTH - 32;
     const moneyY = GAME_HEIGHT - 72;
-    drawWeaponSlotReadout(16, moneyY - 64, width, weaponsPlaced, weaponSlots);
+    const weaponY = moneyY - 64;
+    drawDriverPortrait(16, weaponY - 12 - width, width, driver ?? { healthRatio: 1, shakeX: 0, shakeY: 0 });
+    drawWeaponSlotReadout(16, weaponY, width, weaponsPlaced, weaponSlots);
     drawModuleReadout(16, moneyY - 32, width, modules);
     drawMoneyReadout(16, moneyY, width, money);
 }
