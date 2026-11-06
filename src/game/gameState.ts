@@ -8,6 +8,7 @@ import { gameOverUpdate } from "./gameOver";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
 import { requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
+import { activeDialogId, resetTutorialProgress, startDialogChain, stopDialog, updateDialog } from "../ui/textCard";
 
 
 export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
@@ -46,6 +47,12 @@ export function getGameState(): GameState {
 
 export function updateGame(state: GameState) {
     updateScreenTransition();
+    if (activeDialogId() === "combat_tutorial") {
+        const fighting = state.currentScreen === "COMBAT_SCREEN" && state.gameDirector.currentEventType === "COMBAT";
+        if (!fighting) {
+            stopDialog();
+        }
+    }
     setMusic(musicFor(state));
     switch (state.currentScreen) {
         
@@ -69,6 +76,7 @@ export function updateGame(state: GameState) {
             gameOverUpdate();
             break;
     }
+    updateDialog();
     setScreenFade(screenFadeAlpha());
 }
 
@@ -93,6 +101,8 @@ export function startNewGame(): void {
         state.playerData = initPlayerData();
         state.gameDirector = initGameDirector();
         state.currentScreen = "BUILDING_SCREEN";
+        resetTutorialProgress();
+        startDialogChain("shop_dialog_1");
     });
 }
 

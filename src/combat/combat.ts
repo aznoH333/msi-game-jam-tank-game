@@ -8,7 +8,7 @@ import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
 import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
-import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
+import { directorAttempt, getEventTypeForIndex, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawHealthBar, drawViewEnergy, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
 import {
@@ -25,6 +25,7 @@ import {
     type Spark,
 } from "./battle";
 import { EXPLOSION_DURATION, REPAIR_RADIUS } from "./constants";
+import { combatActionAllowed, combatGunSelectAllowed, dialogBlocksEnemies, dialogBlocksPlayer, notifyPlayerFired, startFirstCombatTutorial } from "../ui/textCard";
 import { iconFlashAlpha } from "./statusIcons";
 import {
     aimRotation,
@@ -251,6 +252,18 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
     setDrawClip(previousClip);
 }
 
+function isFirstCombat(eventIndex: number): boolean {
+    if (getEventTypeForIndex(eventIndex) !== "COMBAT") {
+        return false;
+    }
+    for (let index = 0; index < eventIndex; index++) {
+        if (getEventTypeForIndex(index) === "COMBAT") {
+            return false;
+        }
+    }
+    return true;
+}
+
 /** Player and enemy share this update. Only the supplied input can start a shot. */
 export function updateCombat(): void {
     setEngineBlend(0);
@@ -261,6 +274,9 @@ export function updateCombat(): void {
         const picked = pickEnemyVehicle(encounterEvent);
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
+        if (isFirstCombat(encounterEvent)) {
+            startFirstCombatTutorial();
+        }
         targetingRepair = false;
         playerViewShake = { magnitude: 0, x: 0, y: 0 };
         enemyViewShake = { magnitude: 0, x: 0, y: 0 };
@@ -303,20 +319,20 @@ export function updateCombat(): void {
     let selectRepair = false;
     let target: { x: number; y: number } | null = null;
     let repairAt: { x: number; y: number } | null = null;
-    if (!fightOver) {
+    if (!fightOver && !dialogBlocksPlayer()) {
         for (let index = 0; index < WEAPON_KEY_COUNT; index++) {
             const down = isKeyDown(`Digit${index + 1}`) || isKeyDown(`Numpad${index + 1}`);
             const pressed = down && !weaponKeyWasDown[index];
             weaponKeyWasDown[index] = down;
             const weapon = livingGuns[index];
-            if (pressed && weapon) {
+            if (pressed && weapon && combatGunSelectAllowed(index)) {
                 chosenAbility = weapon.index;
             }
         }
         const repairDown = isKeyDown("KeyR");
         const repairPressed = repairDown && !repairKeyWasDown;
         repairKeyWasDown = repairDown;
-        if (repairPressed) {
+        if (repairPressed && combatActionAllowed("repair")) {
             selectRepair = true;
         }
     } else {
@@ -328,7 +344,7 @@ export function updateCombat(): void {
     if (chosenAbility !== null) {
         selectRepair = false;
     }
-    if (!fightOver && leftPressed) {
+    if (!fightOver && leftPressed && !dialogBlocksPlayer()) {
         const hit = layoutAbilityButtons(livingGuns.length).find((button) => {
             return mouse.x >= button.x
                 && mouse.y >= button.y
@@ -341,14 +357,16 @@ export function updateCombat(): void {
             && mouse.x < repairButton.x + repairButton.width
             && mouse.y < repairButton.y + repairButton.height;
         if (hit) {
-            chosenAbility = livingGuns[hit.index].index;
-            selectRepair = false;
-        } else if (hitRepair) {
+            if (combatGunSelectAllowed(hit.index)) {
+                chosenAbility = livingGuns[hit.index].index;
+                selectRepair = false;
+            }
+        } else if (hitRepair && combatActionAllowed("repair")) {
             selectRepair = true;
             chosenAbility = null;
-        } else if ((selectRepair || targetingRepair) && chosenAbility === null && playerWorld) {
+        } else if (combatActionAllowed("repair") && (selectRepair || targetingRepair) && chosenAbility === null && playerWorld) {
             repairAt = playerWorld;
-        } else if (mouseWorld && !targetingRepair && !selectRepair) {
+        } else if (combatActionAllowed("fire") && mouseWorld && !targetingRepair && !selectRepair) {
             target = mouseWorld;
         }
     }
@@ -359,12 +377,19 @@ export function updateCombat(): void {
         targetingRepair = false;
     }
 
-    const playerOrders: CombatantOrders | null = fightOver ? null : {
+    const playerOrders: CombatantOrders | null = fightOver || dialogBlocksPlayer() ? null : {
         gun: chosenAbility,
-        target,
-        repair: repairAt,
+        target: combatActionAllowed("fire") ? target : null,
+        repair: combatActionAllowed("repair") ? repairAt : null,
     };
-    stepBattle(fight, dt, { player: playerOrders, enemy: null, enemyAi: !fightOver });
+    const projectilesBefore = fight.projectiles.length;
+    const cooldownBefore = player.guns.map((gun) => gun.cooldown);
+    stepBattle(fight, dt, { player: playerOrders, enemy: null, enemyAi: !fightOver && !dialogBlocksEnemies() });
+    const playerFired = fight.projectiles.length > projectilesBefore
+        || player.guns.some((gun, index) => gun.cooldown > cooldownBefore[index]);
+    if (playerFired) {
+        notifyPlayerFired();
+    }
     for (const name of fight.sounds.splice(0)) {
         playSound(name);
     }

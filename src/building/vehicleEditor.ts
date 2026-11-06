@@ -10,6 +10,7 @@ import { buyOffer } from "./itemShop";
 import { drawBuildingSidebar, drawWeaponSlotOffer, layoutSidebar, SIDEBAR_WIDTH, weaponSlotOfferBounds, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
+import { continueWithTutorialCard, dialogBlocksPlayer, notifyTutorialPlacement, shopActionAllowed, tutorialPlacementMustAttach } from "../ui/textCard";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { serializeVehicle } from "./vehicleSave";
@@ -209,13 +210,27 @@ function isTileTab(tab: EditorTab): tab is TileType {
     return tab === "WEAPON" || tab === "UTILITY" || tab === "BLOCK";
 }
 
+/** Edge contact joins the new part. A shared corner does not. */
+function placementTouchesVehicle(tiles: PlacedTile[], origin: { x: number; y: number }, tile: BaseTile): boolean {
+    if (tiles.length === 0) {
+        return true;
+    }
+    return tiles.some((placed) => {
+        const overlapX = Math.min(origin.x + tile.width, placed.x + placed.base.width) - Math.max(origin.x, placed.x);
+        const overlapY = Math.min(origin.y + tile.height, placed.y + placed.base.height) - Math.max(origin.y, placed.y);
+        return overlapX >= 0 && overlapY >= 0 && (overlapX > 0 || overlapY > 0);
+    });
+}
+
 export function updateVehicleEditor(state: GameState): void {
     const mouse = getMousePosition();
     const wheel = consumeWheelDelta();
     const paneWidth = Math.max(0, GAME_WIDTH - SIDEBAR_WIDTH - DETAILS_SIDEBAR_WIDTH);
     const paneHeight = GAME_HEIGHT;
     const overVehicle = mouse.x >= SIDEBAR_WIDTH && mouse.x < GAME_WIDTH - DETAILS_SIDEBAR_WIDTH && mouse.y >= 0;
-    updateVehicleNameInput(state.playerData.vehicle);
+    if (shopActionAllowed("name")) {
+        updateVehicleNameInput(state.playerData.vehicle);
+    }
     const cheatEnabled = state.playerData.vehicle.name === CHEAT_NAME;
     if (cheatEnabled && !cheatGranted) {
         state.playerData.money = CHEAT_MONEY;
@@ -231,7 +246,10 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // drag the camera with the middle mouse button
-    if (isMouseButtonDown(1)) {
+    if (!shopActionAllowed("camera")) {
+        panning = false;
+        middleWasDown = isMouseButtonDown(1);
+    } else if (isMouseButtonDown(1)) {
         if (!middleWasDown && overVehicle) {
             panning = true;
         }
@@ -248,7 +266,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // zoom toward the cursor
-    if (wheel !== 0 && overVehicle) {
+    if (shopActionAllowed("camera") && wheel !== 0 && overVehicle) {
         const previousCell = CELL_SIZE_PX * zoom;
         const worldX = (mouse.x - cameraX) / previousCell;
         const worldY = (mouse.y - cameraY) / previousCell;
@@ -300,10 +318,11 @@ export function updateVehicleEditor(state: GameState): void {
     const goButton = goButtonBounds(paneWidth);
     const copyButton = copyButtonBounds(paneWidth);
     const weaponSlots = state.playerData.vehicleWeaponSlots;
-    if (leftPressed && brokenVehicleRules(state.playerData.vehicle, weaponSlots).length === 0 && hits(goButton, mouse.x, mouse.y)) {
+    if (shopActionAllowed("go") && leftPressed && brokenVehicleRules(state.playerData.vehicle, weaponSlots).length === 0 && hits(goButton, mouse.x, mouse.y)) {
+        continueWithTutorialCard();
         transitionToNextEvent();
     }
-    const copyClicked = cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
+    const copyClicked = shopActionAllowed("copy") && cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
     if (copyClicked) {
         copyVehicleJson(state.playerData.vehicle);
     }
@@ -315,7 +334,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     // hold right button to erase tiles under the cursor
-    if (!panning && isTileTab(selectedTab) && isMouseButtonDown(2) && hover) {
+    if (shopActionAllowed("erase") && !panning && isTileTab(selectedTab) && isMouseButtonDown(2) && hover) {
         const index = state.playerData.vehicle.tiles.findIndex((placed) => {
             return hover.x >= placed.x
                 && hover.x < placed.x + placed.base.width
@@ -329,7 +348,7 @@ export function updateVehicleEditor(state: GameState): void {
             state.playerData.vehicle.tiles.splice(index, 1);
             playSound("building/tile_remove");
         }
-    } else if (!panning && leftDown && !copyClicked) {
+    } else if (!dialogBlocksPlayer() && !panning && leftDown && !copyClicked) {
         let overSidebar = false;
 
         // switch sidebar tab
@@ -337,18 +356,20 @@ export function updateVehicleEditor(state: GameState): void {
             if (!hits(tab.bounds, mouse.x, mouse.y)) {
                 continue;
             }
-            selectedTab = tab.type;
-            if (isTileTab(selectedTab)) {
-                const tiles = TILE_CATALOG[selectedTab];
-                const stillListed = selectedTile !== null && tiles.includes(selectedTile);
-                selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
-            }
             overSidebar = true;
+            if (shopActionAllowed("tab", tab.type)) {
+                selectedTab = tab.type;
+                if (isTileTab(selectedTab)) {
+                    const tiles = TILE_CATALOG[selectedTab];
+                    const stillListed = selectedTile !== null && tiles.includes(selectedTile);
+                    selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
+                }
+            }
             break;
         }
 
         if (selectedTab === "ITEMS") {
-            if (leftPressed && !overSidebar) {
+            if (shopActionAllowed("buy") && leftPressed && !overSidebar) {
                 const row = layoutItemShop(state.playerData).find((entry) => hits(entry.bounds, mouse.x, mouse.y));
                 if (row) {
                     buyOffer(state.playerData, row.offer);
@@ -356,7 +377,7 @@ export function updateVehicleEditor(state: GameState): void {
             }
         } else if (selectedTab === "OVERCLOCK") {
             const cards = layoutOverclockCards(selectedOverclockTile);
-            if (leftPressed) {
+            if (shopActionAllowed("overclock") && leftPressed) {
                 const plus = cards.find((card) => hits(card.plus, mouse.x, mouse.y));
                 const minus = cards.find((card) => hits(card.minus, mouse.x, mouse.y));
                 const stepped = plus ?? minus;
@@ -382,7 +403,7 @@ export function updateVehicleEditor(state: GameState): void {
                 }
             }
         } else {
-            if (selectedTab === "WEAPON" && leftPressed && !overSidebar && hits(weaponSlotOfferBounds(), mouse.x, mouse.y)) {
+            if (selectedTab === "WEAPON" && shopActionAllowed("weapon-slot") && leftPressed && !overSidebar && hits(weaponSlotOfferBounds(), mouse.x, mouse.y)) {
                 buyWeaponSlot(state.playerData);
                 overSidebar = true;
             }
@@ -393,8 +414,10 @@ export function updateVehicleEditor(state: GameState): void {
                     if (!hits(entry.bounds, mouse.x, mouse.y)) {
                         continue;
                     }
-                    selectedTile = entry.tile;
                     overSidebar = true;
+                    if (shopActionAllowed("place", entry.tile.type)) {
+                        selectedTile = entry.tile;
+                    }
                     break;
                 }
             }
@@ -414,7 +437,8 @@ export function updateVehicleEditor(state: GameState): void {
                         && origin.y + tileToPlace.height > placed.y;
                 });
                 const weaponAllowed = tileToPlace.type !== "WEAPON" || canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
-                if (insideGrid && !blocked && weaponAllowed && state.playerData.money >= tileToPlace.price) {
+                const attached = !tutorialPlacementMustAttach() || placementTouchesVehicle(state.playerData.vehicle.tiles, origin, tileToPlace);
+                if (shopActionAllowed("place", tileToPlace.type) && insideGrid && !blocked && weaponAllowed && attached && state.playerData.money >= tileToPlace.price) {
                     state.playerData.money -= tileToPlace.price;
                     state.playerData.vehicle.tiles.push({
                         base: { ...tileToPlace },
@@ -426,6 +450,7 @@ export function updateVehicleEditor(state: GameState): void {
                         })),
                     });
                     playSound(placeSound(tileToPlace.type));
+                    notifyTutorialPlacement(tileToPlace);
                 }
             }
         }

@@ -8,6 +8,7 @@ import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
 import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { isKeyDown, isMouseButtonDown } from "../input/input";
+import { dialogBlocksEnemies, dialogBlocksPlayer } from "../ui/textCard";
 import { enemyOnRay, rollDamage, spawnEnemies, stepEnemy, type EnemyActor } from "./enemies";
 import { cellAt, generateMaze, isWalkable, type Maze, type MazePickup } from "./maze";
 import { WeaponCatalog } from "./constants/weaponCatalog";
@@ -89,11 +90,15 @@ export function updateExplore(): void {
     const player = state.playerData;
     if (player.personHealth > 0) {
         setEngineBlend(stepPlayer(run, dt));
-        fireWeapon(run, dt);
+        if (!dialogBlocksPlayer()) {
+            fireWeapon(run, dt);
+        }
         collectPickups(run);
         let damage = 0;
-        for (const enemy of run.enemies) {
-            damage += stepEnemy(enemy, run.maze, run.x, run.z, dt, CELL_SIZE, Math.random);
+        if (!dialogBlocksEnemies()) {
+            for (const enemy of run.enemies) {
+                damage += stepEnemy(enemy, run.maze, run.x, run.z, dt, CELL_SIZE, Math.random);
+            }
         }
         player.personHealth = Math.max(0, player.personHealth - damage);
         run.enemies = run.enemies.filter((enemy) => enemy.health > 0);

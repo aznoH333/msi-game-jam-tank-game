@@ -1,10 +1,12 @@
 import { drawRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
+import { driverIsTalking, driverTalkingMouthOpen } from "./textCard";
 
 const IDLE_SPRITE = "ui/lucky_idle";
 const BLINK_SPRITE = "ui/lucky_idle_blink";
 const SAD_SPRITE = "ui/lucky_sad";
 const HURT_SPRITE = "ui/lucky_hurt";
+const TALKING_SPRITE = "ui/lucky_talking";
 
 const FACE_SIZE = 48;
 
@@ -94,6 +96,9 @@ export function drawDriverPortrait(x: number, y: number, size: number, state: Dr
 }
 
 function faceSprite(healthRatio: number, now: number): string {
+    if (driverIsTalking()) {
+        return driverTalkingMouthOpen() ? TALKING_SPRITE : IDLE_SPRITE;
+    }
     if (now < hurtUntil) {
         return HURT_SPRITE;
     }

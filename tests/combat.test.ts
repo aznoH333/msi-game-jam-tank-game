@@ -390,6 +390,32 @@ describe("combat loop", () => {
         }
         assert.equal(hit, true);
     });
+
+    it("plays repair when a circle starts, and weapon ready when a gun can fire again", () => {
+        const repaired = combatMatch(
+            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const circle = repaired.at(0, "player", { repair: { at: repaired.tile("player", 0) } }).run(0.05);
+        assert.equal(circle.sounds.filter((name) => name === "combat/repair").length, 1);
+        const still = repaired.run(0.2);
+        assert.equal(still.sounds.filter((name) => name === "combat/repair").length, 1);
+
+        const playerGun = gun(0, 0, 20, 10);
+        const turret = playerGun.base.turret;
+        if (!turret) {
+            throw new Error("gun has no turret");
+        }
+        turret.reloadTime = 0.2;
+        const match = combatMatch(
+            vehicle("Player", [playerGun, battery(2, 0)]),
+            vehicle("Enemy", [block(0, 0, 100)]),
+        );
+        const fired = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
+        assert.equal(fired.sounds.includes("combat/weapon_ready"), false);
+        const ready = match.run(0.25);
+        assert.equal(ready.sounds.filter((name) => name === "combat/weapon_ready").length, 1);
+    });
 });
 
 function chanceOverclock(kind: "jamChance" | "failChance"): PlacedTile["overclocks"][number] {

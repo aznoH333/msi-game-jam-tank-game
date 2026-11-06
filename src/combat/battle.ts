@@ -572,6 +572,9 @@ function updateCombatant(
             }
         } else if (runtime.cooldown > 0) {
             runtime.cooldown = Math.max(0, runtime.cooldown - dt);
+            if (runtime.cooldown === 0 && combatant.control === "PLAYER") {
+                cueSound(battle, "combat/weapon_ready");
+            }
         }
     }
 }
@@ -809,6 +812,9 @@ function placeRepair(combatant: Combatant, battle: Battle, point: { x: number; y
     }
     battle.repairs.push({ x: point.x, y: point.y, age: 0, owner: combatant, framesSinceTick: 0, pendingDt: 0 });
     combatant.repairCooldown = REPAIR_COOLDOWN;
+    if (combatant.control === "PLAYER") {
+        cueSound(battle, "combat/repair");
+    }
 }
 
 export function createBattle(playerVehicle: BaseVehicle, enemyVehicle: BaseVehicle, moneyDropped = 0): Battle {

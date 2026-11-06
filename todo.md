@@ -18,7 +18,8 @@
 
 
 # short term goals.
-- [ ] talking guy
+- [X] talking guy
+- [ ] add lucky lines and tutorial
 - [ ] add button and gui noises
 - [ ] rebalance tiles again
 - [ ] overworld loot
