@@ -10,7 +10,8 @@ import { buyOffer } from "./itemShop";
 import { drawBuildingSidebar, drawWeaponSlotOffer, layoutSidebar, SIDEBAR_WIDTH, weaponSlotOfferBounds, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
-import { continueWithTutorialCard, dialogBlocksPlayer, notifyTutorialPlacement, shopActionAllowed, tutorialPlacementMustAttach } from "../ui/textCard";
+import { tutorialSlots, type TutorialSlot } from "./tutorialSlots";
+import { continueWithTutorialCard, dialogBlocksPlayer, getCurrentDialogCard, notifyTutorialPlacement, shopActionAllowed, tutorialPlacementMustAttach } from "../ui/textCard";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { serializeVehicle } from "./vehicleSave";
@@ -148,6 +149,58 @@ function cellAt(grid: GridGeometry, x: number, y: number): { x: number; y: numbe
         x: Math.floor((x - grid.x) / grid.cell),
         y: Math.floor((y - grid.y) / grid.cell),
     };
+}
+
+function placementTutorialStep(): "gun" | "power" | null {
+    const id = getCurrentDialogCard()?.specialIdentifier;
+    if (id === "gun_place_tutorial") {
+        return "gun";
+    }
+    if (id === "power_place_tutorial") {
+        return "power";
+    }
+    return null;
+}
+
+/** `undefined` when the tutorial is not locking placement. `null` when this tile does not fit an open ghost. */
+function lockedTutorialOrigin(
+    tile: BaseTile,
+    hover: { x: number; y: number } | null,
+    placed: PlacedTile[],
+): { x: number; y: number } | null | undefined {
+    const step = placementTutorialStep();
+    if (!step) {
+        return undefined;
+    }
+    const hit = openTutorialSlots(step, placed).find((slot) => {
+        return slot.tileName === tile.tileName
+            && hover !== null
+            && hover.x >= slot.x
+            && hover.x < slot.x + slot.width
+            && hover.y >= slot.y
+            && hover.y < slot.y + slot.height;
+    });
+    return hit ? { x: hit.x, y: hit.y } : null;
+}
+
+function openTutorialSlots(step: "gun" | "power", placed: PlacedTile[]): TutorialSlot[] {
+    return tutorialSlots().filter((slot) => {
+        const inStep = step === "gun" ? slot.kind === "gun" : slot.kind !== "gun";
+        if (!inStep) {
+            return false;
+        }
+        return !placed.some((tile) => tile.base.tileName === slot.tileName && tile.x === slot.x && tile.y === slot.y);
+    });
+}
+
+function catalogTileByName(tileName: string): BaseTile | undefined {
+    for (const tiles of Object.values(TILE_CATALOG)) {
+        const match = tiles.find((tile) => tile.tileName === tileName);
+        if (match) {
+            return match;
+        }
+    }
+    return undefined;
 }
 
 function placementOrigin(grid: GridGeometry, mouseX: number, mouseY: number, tile: BaseTile): { x: number; y: number } {
@@ -425,32 +478,35 @@ export function updateVehicleEditor(state: GameState): void {
             // hold left button to paint the tile centered on the cursor
             if (!overSidebar && !hits(goButton, mouse.x, mouse.y) && hover && selectedTile) {
                 const tileToPlace: BaseTile = selectedTile;
-                const origin = placementOrigin(grid, mouse.x, mouse.y, tileToPlace);
-                const insideGrid = origin.x >= 0
-                    && origin.y >= 0
-                    && origin.x + tileToPlace.width <= GRID_COLUMNS
-                    && origin.y + tileToPlace.height <= GRID_ROWS;
-                const blocked = state.playerData.vehicle.tiles.some((placed) => {
-                    return origin.x < placed.x + placed.base.width
-                        && origin.x + tileToPlace.width > placed.x
-                        && origin.y < placed.y + placed.base.height
-                        && origin.y + tileToPlace.height > placed.y;
-                });
-                const weaponAllowed = tileToPlace.type !== "WEAPON" || canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
-                const attached = !tutorialPlacementMustAttach() || placementTouchesVehicle(state.playerData.vehicle.tiles, origin, tileToPlace);
-                if (shopActionAllowed("place", tileToPlace.type) && insideGrid && !blocked && weaponAllowed && attached && state.playerData.money >= tileToPlace.price) {
-                    state.playerData.money -= tileToPlace.price;
-                    state.playerData.vehicle.tiles.push({
-                        base: { ...tileToPlace },
-                        x: origin.x,
-                        y: origin.y,
-                        overclocks: (tileToPlace.turret?.overClocks ?? []).map((slider) => ({
-                            base: slider,
-                            value: slider.baseValue,
-                        })),
+                const locked = lockedTutorialOrigin(tileToPlace, hover, state.playerData.vehicle.tiles);
+                const origin = locked === undefined ? placementOrigin(grid, mouse.x, mouse.y, tileToPlace) : locked;
+                if (origin) {
+                    const insideGrid = origin.x >= 0
+                        && origin.y >= 0
+                        && origin.x + tileToPlace.width <= GRID_COLUMNS
+                        && origin.y + tileToPlace.height <= GRID_ROWS;
+                    const blocked = state.playerData.vehicle.tiles.some((placed) => {
+                        return origin.x < placed.x + placed.base.width
+                            && origin.x + tileToPlace.width > placed.x
+                            && origin.y < placed.y + placed.base.height
+                            && origin.y + tileToPlace.height > placed.y;
                     });
-                    playSound(placeSound(tileToPlace.type));
-                    notifyTutorialPlacement(tileToPlace);
+                    const weaponAllowed = tileToPlace.type !== "WEAPON" || canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
+                    const attached = !tutorialPlacementMustAttach() || placementTouchesVehicle(state.playerData.vehicle.tiles, origin, tileToPlace);
+                    if (shopActionAllowed("place", tileToPlace.type) && insideGrid && !blocked && weaponAllowed && attached && state.playerData.money >= tileToPlace.price) {
+                        state.playerData.money -= tileToPlace.price;
+                        state.playerData.vehicle.tiles.push({
+                            base: { ...tileToPlace },
+                            x: origin.x,
+                            y: origin.y,
+                            overclocks: (tileToPlace.turret?.overClocks ?? []).map((slider) => ({
+                                base: slider,
+                                value: slider.baseValue,
+                            })),
+                        });
+                        playSound(placeSound(tileToPlace.type));
+                        notifyTutorialPlacement(tileToPlace);
+                    }
                 }
             }
         }
@@ -541,11 +597,36 @@ export function updateVehicleEditor(state: GameState): void {
         );
     }
 
+    const ghostStep = placementTutorialStep();
+    if (ghostStep) {
+        for (const slot of openTutorialSlots(ghostStep, state.playerData.vehicle.tiles)) {
+            const ghost = catalogTileByName(slot.tileName);
+            if (!ghost) {
+                continue;
+            }
+            drawTileSprite(
+                ghost,
+                slot.x,
+                slot.y,
+                grid.x + (slot.x + ghost.width / 2) * grid.cell,
+                grid.y + (slot.y + ghost.height / 2) * grid.cell,
+                grid.cell / TILE_SIZE_PX,
+                2,
+                0.35,
+            );
+        }
+    }
+
     // placement preview sits on the grid cells the cursor-centered tile would occupy
     if (isTileTab(selectedTab) && hover && selectedTile) {
-        const origin = placementOrigin(grid, mouse.x, mouse.y, selectedTile);
+        const cursorOrigin = placementOrigin(grid, mouse.x, mouse.y, selectedTile);
+        const locked = lockedTutorialOrigin(selectedTile, hover, state.playerData.vehicle.tiles);
+        const origin = locked === undefined ? cursorOrigin : locked ?? cursorOrigin;
         let previewColor: string | undefined;
-        for (const placed of state.playerData.vehicle.tiles) {
+        if (locked === null) {
+            previewColor = "#ff5c5c";
+        }
+        for (const placed of locked === null ? [] : state.playerData.vehicle.tiles) {
             const overlaps = origin.x < placed.x + placed.base.width
                 && origin.x + selectedTile.width > placed.x
                 && origin.y < placed.y + placed.base.height
@@ -607,7 +688,7 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     setDrawClip(null);
-    drawBuildingSidebar(layout, selectedTile);
+    drawBuildingSidebar(layout, selectedTile, state.playerData.money);
     if (selectedTab === "WEAPON") {
         const slotPrice = nextWeaponSlotPrice(state.playerData.vehicleWeaponSlots);
         drawWeaponSlotOffer(slotPrice, state.playerData.money >= slotPrice);

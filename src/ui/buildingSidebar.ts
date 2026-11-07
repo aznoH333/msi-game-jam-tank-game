@@ -17,7 +17,6 @@ const TABS: { type: EditorTab; label: string }[] = [
     { type: "UTILITY", label: "utility" },
     { type: "BLOCK", label: "blocks" },
     { type: "OVERCLOCK", label: "overclocks" },
-    { type: "ITEMS", label: "items" },
 ];
 
 export interface Bounds {
@@ -105,7 +104,7 @@ export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
         y: bounds.y,
         width: bounds.width,
         height: bounds.height,
-        color: "#262c3a",
+        color: enabled ? "#262c3a" : "#6e2430",
     });
     drawText({
         text: "Weapon slot",
@@ -136,7 +135,7 @@ export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
     });
 }
 
-export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | null): void {
+export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | null, money: number): void {
     // sidebar background
     drawRect({
         x: layout.bounds.x,
@@ -193,12 +192,13 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
     for (const entry of layout.entries) {
         const iconScale = iconSize / (Math.max(entry.tile.width, entry.tile.height) * TILE_SIZE_PX);
         const selectedEntry = entry.tile === selected;
+        const affordable = entry.tile.price <= money;
         drawRect({
             x: entry.bounds.x,
             y: entry.bounds.y,
             width: entry.bounds.width,
             height: entry.bounds.height,
-            color: selectedEntry ? "#343c50" : "#262c3a",
+            color: affordable ? (selectedEntry ? "#343c50" : "#262c3a") : (selectedEntry ? "#8a3038" : "#6e2430"),
         });
 
         if (selectedEntry) {

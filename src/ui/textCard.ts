@@ -1,3 +1,4 @@
+import { playSound } from "../audio/audio";
 import { ABILITY_BAR_WIDTH } from "../combat/constants";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawText, measureText } from "../drawing/text";
@@ -18,7 +19,8 @@ export interface DialogChain {
     cards: TextCard[];
 }
 
-const CHARS_PER_SECOND = 30;
+const CHARS_PER_SECOND = 60;
+const TALK_SOUND = "misc/talking";
 const NORMAL_HOLD_SECONDS = 3;
 const TALK_FRAME_SECONDS = 0.1;
 const BOX_MARGIN = 16;
@@ -225,7 +227,14 @@ export function updateDialog(): void {
         active.finishedAt = now;
     }
     if (active.shown < card.text.length) {
+        const revealedBefore = Math.floor(active.shown);
         active.shown = Math.min(card.text.length, active.shown + dt * CHARS_PER_SECOND);
+        const revealedAfter = Math.floor(active.shown);
+        for (let index = revealedBefore; index < revealedAfter; index++) {
+            if (card.text[index] !== " ") {
+                playSound(TALK_SOUND);
+            }
+        }
         if (active.shown >= card.text.length) {
             active.finishedAt = now;
         }

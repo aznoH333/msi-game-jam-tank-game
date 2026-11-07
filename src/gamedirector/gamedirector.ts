@@ -9,7 +9,7 @@ import { markShopCheckpoint, rewindToCheckpoint } from "./checkpoint";
  */
 export type EventType = "SHOP" | "TRAVEL" | "COMBAT" | "EXPLORATION";
 
-const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "EXPLORATION", "TRAVEL", "COMBAT", "TRAVEL"];
+const EVENT_LOOP: EventType[] = ["SHOP", "SHOP", "TRAVEL", "COMBAT", "TRAVEL", "EXPLORATION", "TRAVEL", "COMBAT", "TRAVEL"];
 
 
 
