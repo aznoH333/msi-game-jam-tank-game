@@ -7,8 +7,9 @@ import { drawText } from "../drawing/text";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
+import { unlockVehicleTiles } from "../game/playerData";
 import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
-import { directorAttempt, getEventTypeForIndex, transitionToNextEvent } from "../gamedirector/gamedirector";
+import { advanceEnemyIndex, directorAttempt, getEventTypeForIndex, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawHealthBar, drawViewEnergy, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
 import {
@@ -271,7 +272,7 @@ export function updateCombat(): void {
     if (!battle || encounterEvent !== state.gameDirector.eventIndex || combatAttempt !== directorAttempt()) {
         encounterEvent = state.gameDirector.eventIndex;
         combatAttempt = directorAttempt();
-        const picked = pickEnemyVehicle(encounterEvent);
+        const picked = pickEnemyVehicle(state.gameDirector.enemyIndex);
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
         if (isFirstCombat(encounterEvent)) {
@@ -400,6 +401,8 @@ export function updateCombat(): void {
     const aimPlayerWorld = playerCamera && mouseOverPlayer ? screenToWorld(playerCamera, mouse.x, mouse.y) : null;
     if (fight.result === "victory" && !moneyAwarded) {
         state.playerData.money += fight.moneyDropped;
+        unlockVehicleTiles(state.playerData, fight.enemy.instance.base);
+        advanceEnemyIndex();
         moneyAwarded = true;
     }
 

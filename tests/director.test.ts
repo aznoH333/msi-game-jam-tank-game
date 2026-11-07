@@ -5,7 +5,7 @@ import type { GameDirector } from "../src/gamedirector/gamedirector";
 import { PERSON_HEALTH_MAX, initPlayerData } from "../src/game/playerData";
 
 function director(eventIndex: number, currentEventType: GameDirector["currentEventType"], lastCheckPoint = 0): GameDirector {
-    return { eventIndex, lastCheckPoint, currentEventType };
+    return { eventIndex, lastCheckPoint, currentEventType, enemyIndex: 0 };
 }
 
 describe("checkpoints", () => {

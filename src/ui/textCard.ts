@@ -49,7 +49,7 @@ let trackedTutorial = "";
 let placedGenerator = false;
 let placedBattery = false;
 
-export type ShopAction = "camera" | "name" | "go" | "erase" | "copy" | "tab" | "place" | "weapon-slot" | "buy" | "overclock";
+export type ShopAction = "camera" | "name" | "go" | "erase" | "copy" | "tab" | "place" | "module" | "buy" | "overclock";
 
 export function startDialogChain(dialogIdentifier: string): void {
     const chain = dialogCatalog.find((entry) => entry.dialogIdentifier === dialogIdentifier);

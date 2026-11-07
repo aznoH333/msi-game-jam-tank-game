@@ -7,7 +7,7 @@ import { transitionToNextEvent } from "../gamedirector/gamedirector";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { buyOffer } from "./itemShop";
-import { drawBuildingSidebar, drawWeaponSlotOffer, layoutSidebar, SIDEBAR_WIDTH, weaponSlotOfferBounds, type Bounds, type EditorTab } from "../ui/buildingSidebar";
+import { drawBuildingSidebar, drawModuleOffer, layoutSidebar, moduleOfferBounds, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { tutorialSlots, type TutorialSlot } from "./tutorialSlots";
@@ -16,7 +16,7 @@ import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInpu
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { serializeVehicle } from "./vehicleSave";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
-import { brokenVehicleRules, buyWeaponSlot, canAddWeapon, nextWeaponSlotPrice, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
+import { brokenVehicleRules, buyOverclockModule, canAddWeapon, OVERCLOCK_MODULE_PRICE, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
 import { TANK_TRACK_SPRITE, tankTrackColumns } from "./tankTracks";
 import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
@@ -284,6 +284,9 @@ export function updateVehicleEditor(state: GameState): void {
     if (shopActionAllowed("name")) {
         updateVehicleNameInput(state.playerData.vehicle);
     }
+    if (selectedTile && !state.playerData.unlockedTiles.includes(selectedTile.tileName)) {
+        selectedTile = null;
+    }
     const cheatEnabled = state.playerData.vehicle.name === CHEAT_NAME;
     if (cheatEnabled && !cheatGranted) {
         state.playerData.money = CHEAT_MONEY;
@@ -414,8 +417,12 @@ export function updateVehicleEditor(state: GameState): void {
                 selectedTab = tab.type;
                 if (isTileTab(selectedTab)) {
                     const tiles = TILE_CATALOG[selectedTab];
-                    const stillListed = selectedTile !== null && tiles.includes(selectedTile);
-                    selectedTile = stillListed ? selectedTile : tiles[0] ?? null;
+                    const stillListed = selectedTile !== null
+                        && tiles.includes(selectedTile)
+                        && state.playerData.unlockedTiles.includes(selectedTile.tileName);
+                    selectedTile = stillListed
+                        ? selectedTile
+                        : tiles.find((tile) => state.playerData.unlockedTiles.includes(tile.tileName)) ?? null;
                 }
             }
             break;
@@ -456,8 +463,8 @@ export function updateVehicleEditor(state: GameState): void {
                 }
             }
         } else {
-            if (selectedTab === "WEAPON" && shopActionAllowed("weapon-slot") && leftPressed && !overSidebar && hits(weaponSlotOfferBounds(), mouse.x, mouse.y)) {
-                buyWeaponSlot(state.playerData);
+            if (selectedTab === "WEAPON" && shopActionAllowed("module") && leftPressed && !overSidebar && hits(moduleOfferBounds(), mouse.x, mouse.y)) {
+                buyOverclockModule(state.playerData);
                 overSidebar = true;
             }
 
@@ -468,7 +475,7 @@ export function updateVehicleEditor(state: GameState): void {
                         continue;
                     }
                     overSidebar = true;
-                    if (shopActionAllowed("place", entry.tile.type)) {
+                    if (shopActionAllowed("place", entry.tile.type) && state.playerData.unlockedTiles.includes(entry.tile.tileName)) {
                         selectedTile = entry.tile;
                     }
                     break;
@@ -493,7 +500,8 @@ export function updateVehicleEditor(state: GameState): void {
                     });
                     const weaponAllowed = tileToPlace.type !== "WEAPON" || canAddWeapon(state.playerData.vehicle, state.playerData.vehicleWeaponSlots);
                     const attached = !tutorialPlacementMustAttach() || placementTouchesVehicle(state.playerData.vehicle.tiles, origin, tileToPlace);
-                    if (shopActionAllowed("place", tileToPlace.type) && insideGrid && !blocked && weaponAllowed && attached && state.playerData.money >= tileToPlace.price) {
+                    const unlocked = state.playerData.unlockedTiles.includes(tileToPlace.tileName);
+                    if (unlocked && shopActionAllowed("place", tileToPlace.type) && insideGrid && !blocked && weaponAllowed && attached && state.playerData.money >= tileToPlace.price) {
                         state.playerData.money -= tileToPlace.price;
                         state.playerData.vehicle.tiles.push({
                             base: { ...tileToPlace },
@@ -688,10 +696,9 @@ export function updateVehicleEditor(state: GameState): void {
     }
 
     setDrawClip(null);
-    drawBuildingSidebar(layout, selectedTile, state.playerData.money);
+    drawBuildingSidebar(layout, selectedTile, state.playerData.money, state.playerData.unlockedTiles);
     if (selectedTab === "WEAPON") {
-        const slotPrice = nextWeaponSlotPrice(state.playerData.vehicleWeaponSlots);
-        drawWeaponSlotOffer(slotPrice, state.playerData.money >= slotPrice);
+        drawModuleOffer(OVERCLOCK_MODULE_PRICE, state.playerData.money >= OVERCLOCK_MODULE_PRICE);
     }
     if (selectedTab === "ITEMS") {
         drawItemShop(state.playerData);

@@ -9,7 +9,7 @@ import { markShopCheckpoint, rewindToCheckpoint } from "./checkpoint";
  */
 export type EventType = "SHOP" | "TRAVEL" | "COMBAT" | "EXPLORATION";
 
-const EVENT_LOOP: EventType[] = ["SHOP", "SHOP", "TRAVEL", "COMBAT", "TRAVEL", "EXPLORATION", "TRAVEL", "COMBAT", "TRAVEL"];
+const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL"];
 
 
 
@@ -18,6 +18,7 @@ export interface GameDirector {
     /** When the player dies they are restored to this event */
     lastCheckPoint: number;
     currentEventType: EventType;
+    enemyIndex: number;
 }
 
 
@@ -26,6 +27,7 @@ export function initGameDirector(): GameDirector {
     return {
         eventIndex: 0,
         lastCheckPoint: 0,
+        enemyIndex: 0,
         currentEventType: "SHOP" 
     }
 }
@@ -42,6 +44,11 @@ export function directorAttempt(): number {
 
 export function beginAttempt(): void {
     attempt += 1;
+}
+
+/** The next fight draws from the next enemy-catalog range. */
+export function advanceEnemyIndex(): void {
+    getGameState().gameDirector.enemyIndex += 1;
 }
 
 /** The shop the player is standing in becomes the place death sends them back to. */

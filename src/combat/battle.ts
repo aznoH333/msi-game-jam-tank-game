@@ -5,7 +5,6 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import {
     ABILITY_BAR_WIDTH,
     DEFEAT_EXPLOSION_RADIUS,
-    DEFEAT_HEALTH_RATIO,
     DIRECT_MISS_DISTANCE,
     EXPLOSION_DURATION,
     OPENING_FIRE_DELAY,
@@ -184,6 +183,10 @@ export interface CombatState {
 
 export function gunsOf(instance: VehicleInstance): TileInstance[] {
     return instance.tiles.filter((part) => part.tile.base.turret !== undefined);
+}
+
+function hasLivingWeapon(instance: VehicleInstance): boolean {
+    return gunsOf(instance).some((part) => part.health > 0);
 }
 
 /** Capacity and generation from living parts, using the same base as the builder. */
@@ -947,16 +950,9 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
 
     updateRepairs(battle, dt, view.playerCamera, view.enemyCamera);
 
-    if (!fightOver) {
-        const playerHealthNow = healthRatio(battle.player.instance);
-        const enemyHealthNow = healthRatio(battle.enemy.instance);
-        if (enemyHealthNow !== null && enemyHealthNow < DEFEAT_HEALTH_RATIO) {
-            battle.result = "victory";
-            destroyDefeatedTank(battle, battle.enemy, view.enemyCamera);
-        } else if (playerHealthNow !== null && playerHealthNow < DEFEAT_HEALTH_RATIO) {
-            battle.result = "defeat";
-            destroyDefeatedTank(battle, battle.player, view.playerCamera);
-        }
+    if (!fightOver && !hasLivingWeapon(battle.enemy.instance)) {
+        battle.result = "victory";
+        destroyDefeatedTank(battle, battle.enemy, view.enemyCamera);
     }
 
     const stillBursting: Explosion[] = [];

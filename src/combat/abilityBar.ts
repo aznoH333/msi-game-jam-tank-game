@@ -1,4 +1,4 @@
-import { DEFEAT_HEALTH_RATIO, ABILITY_BAR_WIDTH } from "./constants";
+import { ABILITY_BAR_WIDTH } from "./constants";
 import type { TileInstance } from "./types/tileInstance";
 import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
@@ -200,7 +200,7 @@ export function drawAbilityBar(
     }
 }
 
-/** Remaining health as a share of the vehicle's total hit points. The mark is the loss line. */
+/** Remaining health as a share of the vehicle's total hit points. */
 export function drawHealthBar(x: number, y: number, width: number, ratio: number): void {
     const shown = Math.max(0, Math.min(1, ratio));
     drawText({
@@ -237,18 +237,10 @@ export function drawHealthBar(x: number, y: number, width: number, ratio: number
             y: barY,
             width: Math.max(1, width * shown),
             height: barHeight,
-            color: shown < DEFEAT_HEALTH_RATIO ? "#d35b4a" : "#3fbe6e",
+            color: "#3fbe6e",
             zIndex: 8,
         });
     }
-    drawRect({
-        x: x + width * DEFEAT_HEALTH_RATIO,
-        y: barY,
-        width: 2,
-        height: barHeight,
-        color: "#e6c07b",
-        zIndex: 8,
-    });
 }
 
 /** Top-right of a tank view. The player and the enemy use the same corner. */

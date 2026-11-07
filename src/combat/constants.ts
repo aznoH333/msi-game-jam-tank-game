@@ -16,9 +16,6 @@ export const DIRECT_MISS_DISTANCE = 12;
 /** Seconds after a fight starts before either tank can fire. */
 export const OPENING_FIRE_DELAY = 1;
 
-/** A vehicle loses the fight when its remaining hit points fall under this share. */
-export const DEFEAT_HEALTH_RATIO = 0.2;
-
 /** Tile radius of the blast that replaces a tank when it loses. */
 export const DEFEAT_EXPLOSION_RADIUS = 5;
 

@@ -14,6 +14,7 @@ export interface PlayerData {
     weapons: Partial<Record<WeaponName, number>>;
     personHealth: number;
     vehicleWeaponSlots: number;
+    unlockedTiles: string[];
 }
 
 /** Initializes empty player data "new game" */
@@ -27,6 +28,17 @@ export function initPlayerData(): PlayerData {
             "pistol": 50,
         },
         personHealth: PERSON_HEALTH_MAX,
-        vehicleWeaponSlots: 1,
+        vehicleWeaponSlots: 4,
+        unlockedTiles: ["Machine gun", "Metal frame", "Small generator", "Small battery"]
+    }
+}
+
+/** Remember every part that was built into a tank the player just destroyed. */
+export function unlockVehicleTiles(player: PlayerData, vehicle: BaseVehicle): void {
+    for (const tile of vehicle.tiles) {
+        const name = tile.base.tileName;
+        if (!player.unlockedTiles.includes(name)) {
+            player.unlockedTiles.push(name);
+        }
     }
 }

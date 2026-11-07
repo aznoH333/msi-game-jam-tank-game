@@ -75,11 +75,18 @@ function vehicle(name: string, tiles: PlacedTile[]): BaseVehicle {
     return { name, tiles };
 }
 
+/** Keeps a target tank from being wiped just because it has no gun. */
+function crewGun(): PlacedTile {
+    const part = gun(40, 40, 1, 1);
+    part.base.health = 1000;
+    return part;
+}
+
 describe("combat loop", () => {
     it("leaves both tanks intact when nobody fires", () => {
         const outcome = combatMatch(
             vehicle("Player", [block(0, 0, 100)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         ).run(5);
 
         assert.equal(outcome.winner, null);
@@ -91,7 +98,7 @@ describe("combat loop", () => {
     it("damages the aimed tile and not the shooter", () => {
         const match = combatMatch(
             vehicle("Player", [gun(0, 0, 30, 10), battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const aim = match.tile("enemy", 0);
         const held = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(OPENING_FIRE_DELAY);
@@ -105,18 +112,24 @@ describe("combat loop", () => {
         assert.ok(outcome.player.energy < 105);
     });
 
-    it("gives the win to whoever drops the other tank under 20% health", () => {
-        const match = combatMatch(
-            vehicle("Player", [gun(0, 0, 90, 10), battery(2, 0)]),
+    it("destroys an enemy tank that has no living weapon, and leaves a hurt player in the fight", () => {
+        const disarmed = combatMatch(
+            vehicle("Player", [gun(0, 0, 10, 10), battery(2, 0)]),
             vehicle("Enemy", [block(0, 0, 100)]),
-        );
-        const aim = match.tile("enemy", 0);
-        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1 + OPENING_FIRE_DELAY);
+        ).run(0.05);
+        assert.equal(disarmed.winner, "player");
+        assert.equal(disarmed.enemy.healthRatio, 0);
+        assert.equal(disarmed.enemy.tiles[0].health, 0);
+        assert.equal(disarmed.player.healthRatio, 1);
 
-        assert.equal(outcome.winner, "player");
-        assert.equal(outcome.enemy.healthRatio, 0);
-        assert.equal(outcome.enemy.tiles[0].health, 0);
-        assert.equal(outcome.player.healthRatio, 1);
+        const hurt = combatMatch(
+            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Enemy", [gun(0, 0, 90, 10), battery(2, 0)]),
+        );
+        const playerTile = hurt.tile("player", 0);
+        const outcome = hurt.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: playerTile } }).run(1 + OPENING_FIRE_DELAY);
+        assert.equal(outcome.winner, null);
+        assert.equal(outcome.player.tiles[0].health, 10);
     });
 
     it("pays the enemy bounty when the player wins, and nothing otherwise", () => {
@@ -142,14 +155,15 @@ describe("combat loop", () => {
         const playerTile = loss.tile("player", 0);
         const lost = loss.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: playerTile } }).run(2 + OPENING_FIRE_DELAY);
 
-        assert.equal(lost.winner, "enemy");
+        assert.equal(lost.winner, null);
+        assert.equal(lost.player.tiles[0].health, 10);
         assert.equal(lost.moneyDropped, 0);
     });
 
     it("does not fire a gun that costs more energy than the tank has", () => {
         const match = combatMatch(
             vehicle("Player", [gun(0, 0, 50, 10)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const aim = match.tile("enemy", 0);
         const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1 + OPENING_FIRE_DELAY);
@@ -165,7 +179,7 @@ describe("combat loop", () => {
         playerGun.base.turret!.reloadTime = 10;
         const match = combatMatch(
             vehicle("Player", [playerGun]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const aim = match.tile("enemy", 0);
         const outcome = match
@@ -236,7 +250,7 @@ describe("combat loop", () => {
         playerGun.overclocks = [chanceOverclock("jamChance")];
         const match = combatMatch(
             vehicle("Player", [playerGun]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
 
@@ -252,7 +266,7 @@ describe("combat loop", () => {
         playerGun.overclocks = [chanceOverclock("failChance")];
         const match = combatMatch(
             vehicle("Player", [playerGun]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
 
@@ -264,7 +278,7 @@ describe("combat loop", () => {
     it("throws more sparks from a harder hit, then lets them fly out and fade", () => {
         const light = combatMatch(
             vehicle("Player", [gun(0, 0, 30, 10), battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const lightAim = light.tile("enemy", 0);
         const lightHit = light.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: lightAim } }).run(OPENING_FIRE_DELAY + 0.25);
@@ -276,7 +290,7 @@ describe("combat loop", () => {
 
         const heavy = combatMatch(
             vehicle("Player", [gun(0, 0, 60, 10), battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const heavyHit = heavy.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: heavy.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.25);
         assert.ok(heavyHit.sparks.length > lightHit.sparks.length);
@@ -292,7 +306,7 @@ describe("combat loop", () => {
         turret.impactSound = "weapons/explosion_small";
         const match = combatMatch(
             vehicle("Player", [playerGun, battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } });
         let fired = false;
@@ -322,7 +336,7 @@ describe("combat loop", () => {
         jammedGun.overclocks = [chanceOverclock("jamChance")];
         const jammed = combatMatch(
             vehicle("Player", [jammedGun]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         jammed.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: jammed.tile("enemy", 0) } });
         const jam = jammed.run(OPENING_FIRE_DELAY + 0.05);
@@ -340,7 +354,7 @@ describe("combat loop", () => {
         failedGun.overclocks = [chanceOverclock("failChance")];
         const failed = combatMatch(
             vehicle("Player", [failedGun]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const fail = failed.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: failed.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
         assert.equal(fail.player.tiles[0].fault, "fail");
@@ -368,7 +382,7 @@ describe("combat loop", () => {
     it("turns a damaged tile white, then fades that back over 50ms", () => {
         const match = combatMatch(
             vehicle("Player", [gun(0, 0, 30, 10), battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const aim = match.tile("enemy", 0);
         match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } });
@@ -394,7 +408,7 @@ describe("combat loop", () => {
     it("plays repair when a circle starts, and weapon ready when a gun can fire again", () => {
         const repaired = combatMatch(
             vehicle("Player", [block(0, 0, 100)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const circle = repaired.at(0, "player", { repair: { at: repaired.tile("player", 0) } }).run(0.05);
         assert.equal(circle.sounds.filter((name) => name === "combat/repair").length, 1);
@@ -409,7 +423,7 @@ describe("combat loop", () => {
         turret.reloadTime = 0.2;
         const match = combatMatch(
             vehicle("Player", [playerGun, battery(2, 0)]),
-            vehicle("Enemy", [block(0, 0, 100)]),
+            vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const fired = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: match.tile("enemy", 0) } }).run(OPENING_FIRE_DELAY + 0.05);
         assert.equal(fired.sounds.includes("combat/weapon_ready"), false);

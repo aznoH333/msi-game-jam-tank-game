@@ -6,7 +6,7 @@ import { tankTrackColumns, tankTrackSprite } from "../src/building/tankTracks";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
 import { serializeVehicle, vehicleFromSave } from "../src/building/vehicleSave";
 import { adjustOverclock, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
-import { brokenVehicleRules, buyWeaponSlot, nextWeaponSlotPrice } from "../src/building/vehicleRules";
+import { brokenVehicleRules, buyOverclockModule, OVERCLOCK_MODULE_PRICE } from "../src/building/vehicleRules";
 import { initPlayerData } from "../src/game/playerData";
 
 const NEEDS_GUN = "The vehicle needs a gun.";
@@ -183,19 +183,16 @@ describe("overclock modules", () => {
     });
 });
 
-describe("weapon slots", () => {
-    it("charges 10,000 for the first extra slot and 10,000 more for each one after", () => {
-        assert.equal(nextWeaponSlotPrice(1), 10_000);
-        assert.equal(nextWeaponSlotPrice(2), 20_000);
-        assert.equal(nextWeaponSlotPrice(3), 30_000);
-
+describe("overclock module shop", () => {
+    it("sells one module for a flat price and refuses the sale without the money", () => {
         const player = initPlayerData();
-        player.money = 10_000;
-        assert.equal(buyWeaponSlot(player), true);
-        assert.equal(player.vehicleWeaponSlots, 2);
+        player.money = OVERCLOCK_MODULE_PRICE;
+        player.overclockModules = 0;
+        assert.equal(buyOverclockModule(player), true);
+        assert.equal(player.overclockModules, 1);
         assert.equal(player.money, 0);
-        assert.equal(buyWeaponSlot(player), false);
-        assert.equal(player.vehicleWeaponSlots, 2);
+        assert.equal(buyOverclockModule(player), false);
+        assert.equal(player.overclockModules, 1);
     });
 });
 

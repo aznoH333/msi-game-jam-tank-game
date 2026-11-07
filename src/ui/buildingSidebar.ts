@@ -7,8 +7,8 @@ import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type TileType } from "../bui
 /** Matches the combat ability bar so the two left sidebars line up. */
 export const SIDEBAR_WIDTH = ABILITY_BAR_WIDTH;
 export const SIDEBAR_CONTENT_TOP = 68;
-const WEAPON_SLOT_OFFER_HEIGHT = 64;
-const WEAPON_SLOT_OFFER_GAP = 8;
+const MODULE_OFFER_HEIGHT = 64;
+const MODULE_OFFER_GAP = 8;
 
 export type EditorTab = TileType | "OVERCLOCK" | "ITEMS";
 
@@ -67,7 +67,7 @@ export function layoutSidebar(screenHeight: number, activeTab: EditorTab, tiles:
     const entryGap = 8;
     let entryY = SIDEBAR_CONTENT_TOP;
     if (activeTab === "WEAPON") {
-        entryY += WEAPON_SLOT_OFFER_HEIGHT + WEAPON_SLOT_OFFER_GAP;
+        entryY += MODULE_OFFER_HEIGHT + MODULE_OFFER_GAP;
     }
     const entries = tiles.map((tile) => {
         const bounds = {
@@ -87,17 +87,17 @@ export function layoutSidebar(screenHeight: number, activeTab: EditorTab, tiles:
     };
 }
 
-export function weaponSlotOfferBounds(): Bounds {
+export function moduleOfferBounds(): Bounds {
     return {
         x: 16,
         y: SIDEBAR_CONTENT_TOP,
         width: SIDEBAR_WIDTH - 32,
-        height: WEAPON_SLOT_OFFER_HEIGHT,
+        height: MODULE_OFFER_HEIGHT,
     };
 }
 
-export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
-    const bounds = weaponSlotOfferBounds();
+export function drawModuleOffer(price: number, enabled: boolean): void {
+    const bounds = moduleOfferBounds();
     const priceText = String(Math.round(price)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     drawRect({
         x: bounds.x,
@@ -107,7 +107,7 @@ export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
         color: enabled ? "#262c3a" : "#6e2430",
     });
     drawText({
-        text: "Weapon slot",
+        text: "Overclock module",
         x: bounds.x + 12,
         y: bounds.y + 22,
         font: "16px sans-serif",
@@ -116,7 +116,7 @@ export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
         baseline: "middle",
     });
     drawText({
-        text: "One more gun",
+        text: "One module",
         x: bounds.x + 12,
         y: bounds.y + 44,
         font: "13px sans-serif",
@@ -135,7 +135,7 @@ export function drawWeaponSlotOffer(price: number, enabled: boolean): void {
     });
 }
 
-export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | null, money: number): void {
+export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | null, money: number, unlockedTiles: readonly string[]): void {
     // sidebar background
     drawRect({
         x: layout.bounds.x,
@@ -235,12 +235,13 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             });
         }
 
+        const unlocked = unlockedTiles.includes(entry.tile.tileName);
         drawText({
-            text: entry.tile.tileName,
+            text: unlocked ? entry.tile.tileName : "???",
             x: entry.bounds.x + 12 + iconSize + 12,
             y: entry.bounds.y + entry.bounds.height / 2,
             font: "16px sans-serif",
-            color: "#eceae4",
+            color: unlocked ? "#eceae4" : "#8b919c",
             align: "left",
             baseline: "middle",
         });

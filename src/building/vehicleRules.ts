@@ -11,30 +11,24 @@ const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not al
 const TOO_MANY_WEAPONS = "Not enough weapon slots.";
 const TOO_TALL = "The vehicle can be at most twice as tall as it is wide.";
 
-/** First extra slot costs this much. Each slot already owned adds another step. */
-export const WEAPON_SLOT_PRICE_STEP = 10_000;
+/** One overclock module from the shop. */
+export const OVERCLOCK_MODULE_PRICE = 2_000;
 
 export function placedWeaponCount(vehicle: BaseVehicle): number {
     return vehicle.tiles.filter((tile) => tile.base.type === "WEAPON").length;
-}
-
-/** One slot is free. The next costs 10,000, then 20,000, then 30,000. */
-export function nextWeaponSlotPrice(slots: number): number {
-    return Math.max(1, slots) * WEAPON_SLOT_PRICE_STEP;
 }
 
 export function canAddWeapon(vehicle: BaseVehicle, slots: number): boolean {
     return placedWeaponCount(vehicle) < slots;
 }
 
-/** Spend money for one more vehicle weapon slot. */
-export function buyWeaponSlot(player: PlayerData): boolean {
-    const price = nextWeaponSlotPrice(player.vehicleWeaponSlots);
-    if (player.money < price) {
+/** Spend money for one overclock module. */
+export function buyOverclockModule(player: PlayerData): boolean {
+    if (player.money < OVERCLOCK_MODULE_PRICE) {
         return false;
     }
-    player.money -= price;
-    player.vehicleWeaponSlots += 1;
+    player.money -= OVERCLOCK_MODULE_PRICE;
+    player.overclockModules += 1;
     return true;
 }
 
