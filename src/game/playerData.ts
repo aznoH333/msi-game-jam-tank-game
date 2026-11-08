@@ -28,7 +28,7 @@ export function initPlayerData(): PlayerData {
             "pistol": 50,
         },
         personHealth: PERSON_HEALTH_MAX,
-        vehicleWeaponSlots: 4,
+        vehicleWeaponSlots: 3,
         unlockedTiles: ["Machine gun", "Metal frame", "Small generator", "Small battery"]
     }
 }

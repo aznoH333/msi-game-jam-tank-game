@@ -355,7 +355,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             health: 100,
         },
         {
-            tileName: "Large metal frame",
+            tileName: "Large metal plate",
             type: "BLOCK",
             tileSprite: ["tiles/tiles_2x2_0001", "tiles/tiles_2x2_0002", "tiles/tiles_2x2_0003"],
             width: 2,

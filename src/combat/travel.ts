@@ -3,12 +3,14 @@ import { placedWeaponCount } from "../building/vehicleRules";
 import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
-import { boxTriangles, drawScene3D, planeTriangles, type Billboard3D, type FaceTexture, type Triangle3D, type Vec3 } from "../drawing/3d";
-import { drawText } from "../drawing/text";
+import { boxTriangles, drawScene3D, planeTriangles, projectBillboard, type Billboard3D, type Camera3D, type FaceTexture, type Triangle3D, type Vec3 } from "../drawing/3d";
+import { drawSprite } from "../drawing/sprites";
+import { drawText, measureText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
 import { chooseExploration, directorAttempt, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
+import { lootIcon, lootLabel, lootSprite, streetLoot, LOOT_FADE_SECONDS, LOOT_POPUP_SECONDS, type LootReward, type StreetLoot } from "./travelLoot";
 import { drawCombatVehicle } from "./combatView";
 import type { VehicleInstance } from "./types/vehicleInstance";
 
@@ -35,6 +37,21 @@ const SKY_BOTTOM = "#ffd541";
 const ROAD_SPRITE = "world/textures/road";
 const ROAD_TEX_WIDTH = 200;
 const ROAD_TEX_HEIGHT = 63;
+const TRASH_SPRITES = [
+    "world/trash/trash_0001",
+    "world/trash/trash_0002",
+    "world/trash/trash_0003",
+    "world/trash/trash_0004",
+    "world/trash/trash_0005",
+    "world/trash/trash_0006",
+];
+/** Trash frames are 12×9. One pixel matches a pixel of the road texture. */
+const TRASH_WIDTH = 12 * (STREET_HALF * 2) / ROAD_TEX_WIDTH;
+const TRASH_HEIGHT = 9 * (STREET_HALF * 2) / ROAD_TEX_WIDTH;
+const TRASH_SPACING = 2.2;
+/** Loot frames are 15×14. One pixel matches a pixel of the road texture. */
+const LOOT_WIDTH = 15 * (STREET_HALF * 2) / ROAD_TEX_WIDTH;
+const LOOT_HEIGHT = 14 * (STREET_HALF * 2) / ROAD_TEX_WIDTH;
 const BUILDING_SPRITES = [
     "world/textures/buildings_0001",
     "world/textures/buildings_0002",
@@ -49,6 +66,8 @@ let travelAttempt = -1;
 let travelTime = 0;
 let lastUpdateMs = 0;
 let travelLeftWasDown = false;
+/** Container index -> travel time it was opened. */
+const openedLoot = new Map<number, number>();
 
 /** Combat layout with a first-person street in place of the enemy tank. */
 export function updateTravel(): void {
@@ -60,6 +79,7 @@ export function updateTravel(): void {
         travelTime = 0;
         lastUpdateMs = now;
         travelLeftWasDown = isMouseButtonDown(0);
+        openedLoot.clear();
     }
     const dt = Math.min(0.05, Math.max(0, (now - lastUpdateMs) / 1000));
     lastUpdateMs = now;
@@ -74,19 +94,22 @@ export function updateTravel(): void {
     const cameraZ = driveDistance(travelTime, stopZ);
     const stopped = cameraZ >= stopZ - 0.001;
     const nextEvent = getNextEventType();
+    const camera: Camera3D = {
+        position: { x: 0, y: CAMERA_HEIGHT, z: cameraZ },
+        yaw: 0,
+        pitch: -0.06,
+        fov: Math.PI / 3,
+    };
+    const loot = streetLoot(travelEvent, STREET_HALF - 0.9, BILLBOARD_Z - 12);
     drawScene3D({
         viewport: cityView,
         background: SKY_BOTTOM,
         sky: { top: SKY_TOP, bottom: SKY_BOTTOM },
-        camera: {
-            position: { x: 0, y: CAMERA_HEIGHT, z: cameraZ },
-            yaw: 0,
-            pitch: -0.06,
-            fov: Math.PI / 3,
-        },
+        camera,
         triangles: streetTriangles(cameraZ),
-        billboards: [eventBillboard(cameraZ, nextEvent)],
+        billboards: [...trashBillboards(cameraZ), ...lootBillboards(cameraZ, loot), eventBillboard(cameraZ, nextEvent)],
     });
+    drawLootPopups(camera, cityView, cameraZ, loot);
     drawText({
         text: "Travel",
         x: cityView.x + 24,
@@ -126,6 +149,13 @@ export function updateTravel(): void {
     const leftDown = isMouseButtonDown(0);
     const leftPressed = leftDown && !travelLeftWasDown;
     travelLeftWasDown = leftDown;
+    const button = travelButtonBounds(cityView.x, cityView.width, viewHeight);
+    const choices = explorationChoiceBounds(cityView.x, cityView.width, viewHeight);
+    const onTravelButton = stopped && nextEvent !== "EXPLORATION" && hitsButton(button, mouse);
+    const onChoice = stopped && nextEvent === "EXPLORATION" && (hitsButton(choices.explore, mouse) || hitsButton(choices.skip, mouse));
+    if (leftPressed && !onTravelButton && !onChoice) {
+        openLoot(mouse, camera, cityView, cameraZ, loot);
+    }
     if (!stopped) {
         return;
     }
@@ -133,7 +163,6 @@ export function updateTravel(): void {
         drawExplorationChoice(cityView.x, cityView.width, viewHeight, leftPressed, mouse);
         return;
     }
-    const button = travelButtonBounds(cityView.x, cityView.width, viewHeight);
     if (
         leftPressed
         && mouse.x >= button.x
@@ -162,6 +191,19 @@ export function updateTravel(): void {
     });
 }
 
+function explorationChoiceBounds(viewX: number, viewWidth: number, viewHeight: number): {
+    explore: { x: number; y: number; width: number; height: number };
+    skip: { x: number; y: number; width: number; height: number };
+} {
+    const height = 52;
+    const width = 180;
+    const y = viewHeight - 78;
+    return {
+        explore: { x: viewX + viewWidth / 2 - width - 8, y, width, height },
+        skip: { x: viewX + viewWidth / 2 + 8, y, width, height },
+    };
+}
+
 function drawExplorationChoice(
     viewX: number,
     viewWidth: number,
@@ -169,11 +211,7 @@ function drawExplorationChoice(
     leftPressed: boolean,
     mouse: { x: number; y: number },
 ): void {
-    const height = 52;
-    const width = 180;
-    const y = viewHeight - 78;
-    const explore = { x: viewX + viewWidth / 2 - width - 8, y, width, height };
-    const skip = { x: viewX + viewWidth / 2 + 8, y, width, height };
+    const { explore, skip } = explorationChoiceBounds(viewX, viewWidth, viewHeight);
     if (leftPressed && hitsButton(explore, mouse)) {
         chooseExploration("explore");
         return;
@@ -287,6 +325,179 @@ function eventSprite(next: EventType): string {
         return COMBAT_EVENT_SPRITE;
     }
     return EVENT_SPRITE;
+}
+
+function lootBillboards(cameraZ: number, loot: readonly StreetLoot[]): Billboard3D[] {
+    const horizon = Math.sqrt(CAMERA_HEIGHT / STREET_CURVE);
+    const billboards: Billboard3D[] = [];
+    for (const piece of loot) {
+        if (piece.z < cameraZ - 3 || piece.z > cameraZ + horizon * 1.35) {
+            continue;
+        }
+        const openedAt = openedLoot.get(piece.index);
+        const age = openedAt === undefined ? 0 : travelTime - openedAt;
+        if (openedAt !== undefined && age >= LOOT_FADE_SECONDS) {
+            continue;
+        }
+        billboards.push({
+            position: bend({ x: piece.x, y: LOOT_HEIGHT / 2, z: piece.z }, cameraZ),
+            width: LOOT_WIDTH,
+            height: LOOT_HEIGHT,
+            sprite: lootSprite(piece.kind, travelTime, piece.index),
+            alpha: openedAt === undefined ? 1 : 1 - age / LOOT_FADE_SECONDS,
+        });
+    }
+    return billboards;
+}
+
+function openLoot(
+    mouse: { x: number; y: number },
+    camera: Camera3D,
+    viewport: { x: number; y: number; width: number; height: number },
+    cameraZ: number,
+    loot: readonly StreetLoot[],
+): void {
+    let best: StreetLoot | null = null;
+    let bestDepth = Number.POSITIVE_INFINITY;
+    const pad = 8;
+    for (const piece of loot) {
+        if (openedLoot.has(piece.index)) {
+            continue;
+        }
+        const screen = projectBillboard(
+            bend({ x: piece.x, y: LOOT_HEIGHT / 2, z: piece.z }, cameraZ),
+            LOOT_WIDTH,
+            LOOT_HEIGHT,
+            camera,
+            viewport,
+        );
+        if (!screen || screen.depth >= bestDepth) {
+            continue;
+        }
+        if (
+            mouse.x < screen.x - pad
+            || mouse.y < screen.y - pad
+            || mouse.x >= screen.x + screen.width + pad
+            || mouse.y >= screen.y + screen.height + pad
+        ) {
+            continue;
+        }
+        best = piece;
+        bestDepth = screen.depth;
+    }
+    if (!best) {
+        return;
+    }
+    openedLoot.set(best.index, travelTime);
+    const player = getGameState().playerData;
+    if (best.reward.kind === "money") {
+        player.money += best.reward.amount;
+    } else {
+        player.overclockModules += best.reward.amount;
+    }
+}
+
+function drawLootPopups(
+    camera: Camera3D,
+    viewport: { x: number; y: number; width: number; height: number },
+    cameraZ: number,
+    loot: readonly StreetLoot[],
+): void {
+    for (const piece of loot) {
+        const openedAt = openedLoot.get(piece.index);
+        if (openedAt === undefined) {
+            continue;
+        }
+        const age = travelTime - openedAt;
+        if (age >= LOOT_POPUP_SECONDS) {
+            continue;
+        }
+        const screen = projectBillboard(
+            bend({ x: piece.x, y: LOOT_HEIGHT / 2, z: piece.z }, cameraZ),
+            LOOT_WIDTH,
+            LOOT_HEIGHT,
+            camera,
+            viewport,
+        );
+        if (!screen) {
+            continue;
+        }
+        const fade = age < 0.8 ? 1 : 1 - (age - 0.8) / (LOOT_POPUP_SECONDS - 0.8);
+        drawLootPopup(screen.x + screen.width / 2, screen.y - 8 - age * 36, piece.reward, fade);
+    }
+}
+
+function drawLootPopup(x: number, top: number, reward: LootReward, alpha: number): void {
+    const font = "18px sans-serif";
+    const label = lootLabel(reward);
+    const textWidth = measureText(label, font);
+    const icon = 34;
+    const pad = 8;
+    const gap = 8;
+    const boxWidth = pad + icon + gap + textWidth + pad;
+    const boxHeight = 42;
+    const boxX = x - boxWidth / 2;
+    const boxY = top - boxHeight;
+    const shown = Math.max(0, Math.min(1, alpha));
+    drawRect({
+        x: boxX,
+        y: boxY,
+        width: boxWidth,
+        height: boxHeight,
+        color: `rgba(20, 24, 32, ${0.92 * shown})`,
+        zIndex: 9,
+    });
+    drawSprite({
+        sprite: lootIcon(reward),
+        x: boxX + pad + icon / 2,
+        y: boxY + boxHeight / 2,
+        scaleX: 2,
+        scaleY: 2,
+        alpha: shown,
+        zIndex: 9,
+        foreground: true,
+    });
+    const textColor = reward.kind === "money"
+        ? `rgba(230, 192, 123, ${shown})`
+        : `rgba(142, 203, 255, ${shown})`;
+    drawText({
+        text: label,
+        x: boxX + pad + icon + gap,
+        y: boxY + boxHeight / 2,
+        font,
+        color: textColor,
+        align: "left",
+        baseline: "middle",
+        zIndex: 9,
+    });
+}
+
+/** Litter parked on the road. The same stretch keeps the same pieces as the camera drives past. */
+function trashBillboards(cameraZ: number): Billboard3D[] {
+    const horizon = Math.sqrt(CAMERA_HEIGHT / STREET_CURVE);
+    const first = Math.floor((cameraZ - TRASH_SPACING) / TRASH_SPACING) - 1;
+    const last = Math.ceil((cameraZ + horizon * 1.35) / TRASH_SPACING) + 1;
+    const lane = STREET_HALF - 0.9;
+    const billboards: Billboard3D[] = [];
+    for (let index = first; index <= last; index++) {
+        const seed = mixHash(index * 13 + travelEvent * 17 + 3);
+        if (seed % 3 === 0) {
+            continue;
+        }
+        const along = (mixHash(seed ^ 0x9e3779b1) % 1000) / 1000;
+        const z = index * TRASH_SPACING + along * TRASH_SPACING * 0.7;
+        if (z > BILLBOARD_Z - 12) {
+            continue;
+        }
+        const across = ((seed >>> 8) % 1000) / 999;
+        billboards.push({
+            position: bend({ x: (across * 2 - 1) * lane, y: TRASH_HEIGHT / 2, z }, cameraZ),
+            width: TRASH_WIDTH,
+            height: TRASH_HEIGHT,
+            sprite: TRASH_SPRITES[mixHash(seed ^ 0x85ebca6b) % TRASH_SPRITES.length],
+        });
+    }
+    return billboards;
 }
 
 function eventBillboard(cameraZ: number, next: EventType): Billboard3D {

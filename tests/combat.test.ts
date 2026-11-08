@@ -5,6 +5,7 @@ import type { BaseVehicle } from "../src/building/types/vehicle";
 import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, OPENING_FIRE_DELAY, REPAIR_DURATION } from "../src/combat/constants";
 import { FAULT_ICON_DURATION, iconFlashAlpha } from "../src/combat/statusIcons";
 import { combatMatch } from "../src/combat/testHarness";
+import { lootSprite, streetLoot } from "../src/combat/travelLoot";
 
 function block(x: number, y: number, health: number): PlacedTile {
     return {
@@ -429,6 +430,25 @@ describe("combat loop", () => {
         assert.equal(fired.sounds.includes("combat/weapon_ready"), false);
         const ready = match.run(0.25);
         assert.equal(ready.sounds.filter((name) => name === "combat/weapon_ready").length, 1);
+    });
+});
+
+describe("travel loot", () => {
+    it("lays the same containers down for a trip, paying money or one module", () => {
+        const first = streetLoot(2, 5, 108);
+        assert.deepEqual(streetLoot(2, 5, 108), first);
+        assert.ok(first.length > 0);
+        const rewards = [0, 1, 2, 3, 4, 5].flatMap((event) => streetLoot(event, 5, 108).map((piece) => piece.reward));
+        assert.ok(rewards.some((reward) => reward.kind === "money" && reward.amount === 500));
+        assert.ok(rewards.some((reward) => reward.kind === "module" && reward.amount === 1));
+        assert.notDeepEqual(streetLoot(3, 5, 108), first);
+    });
+
+    it("holds each loot blink frame for half a second", () => {
+        assert.equal(lootSprite("crate", 0, 0), "world/loot/crate");
+        assert.equal(lootSprite("crate", 0.49, 0), "world/loot/crate");
+        assert.equal(lootSprite("crate", 0.5, 0), "world/loot/crate_blink");
+        assert.equal(lootSprite("trash_1", 1, 0), "world/loot/trash_1");
     });
 });
 

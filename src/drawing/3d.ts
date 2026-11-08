@@ -36,6 +36,17 @@ export interface Billboard3D {
     width: number;
     height: number;
     sprite: string;
+    /** 1 is solid. Lower values blend the sprite out. */
+    alpha?: number;
+}
+
+export interface ScreenRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** Distance in front of the camera. */
+    depth: number;
 }
 
 export interface DistanceFog {
@@ -99,6 +110,7 @@ let spriteProgram: WebGLProgram | null = null;
 let spriteViewProj: WebGLUniformLocation | null = null;
 let spriteSampler: WebGLUniformLocation | null = null;
 let spriteRepeat: WebGLUniformLocation | null = null;
+let spriteAlpha: WebGLUniformLocation | null = null;
 let spriteFog = emptyFogUniforms();
 
 interface FogUniforms {
@@ -228,6 +240,7 @@ const SPRITE_FS = `
 precision mediump float;
 uniform sampler2D u_texture;
 uniform float u_repeatV;
+uniform float u_alpha;
 varying vec2 v_uv;
 varying vec3 v_world;
 ${FOG_SNIPPET}
@@ -236,7 +249,7 @@ void main() {
     vec4 color = texture2D(u_texture, vec2(v_uv.x, v));
     if (color.a <= 0.5) discard;
     float dist = distance(v_world.xz, u_camera);
-    gl_FragColor = vec4(applyFog(color.rgb, dist), 1.0);
+    gl_FragColor = vec4(applyFog(color.rgb, dist), u_alpha);
 }
 `;
 
@@ -530,6 +543,7 @@ function paintTexturedTriangles(gpu: WebGLRenderingContext, scene: Scene3D, tria
     gpu.uniformMatrix4fv(spriteViewProj, false, viewProj);
     bindFog(gpu, spriteFog, scene.fog, scene.camera);
     gpu.uniform1i(spriteSampler, 0);
+    gpu.uniform1f(spriteAlpha, 1);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, texBuffer);
     gpu.enableVertexAttribArray(0);
     gpu.enableVertexAttribArray(1);
@@ -592,6 +606,7 @@ function paintBillboards(gpu: WebGLRenderingContext, scene: Scene3D): void {
     bindFog(gpu, spriteFog, scene.fog, scene.camera);
     gpu.uniform1i(spriteSampler, 0);
     gpu.uniform1f(spriteRepeat, 0);
+    gpu.uniform1f(spriteAlpha, 1);
     gpu.bindBuffer(gpu.ARRAY_BUFFER, spriteBuffer);
     gpu.enableVertexAttribArray(0);
     gpu.enableVertexAttribArray(1);
@@ -602,12 +617,59 @@ function paintBillboards(gpu: WebGLRenderingContext, scene: Scene3D): void {
         if (!texture) {
             continue;
         }
+        const alpha = billboard.alpha ?? 1;
+        const fading = alpha < 0.999;
+        if (fading) {
+            gpu.enable(gpu.BLEND);
+            gpu.blendFunc(gpu.SRC_ALPHA, gpu.ONE_MINUS_SRC_ALPHA);
+        }
+        gpu.uniform1f(spriteAlpha, alpha);
         writeBillboard(billboard, basis);
         gpu.bufferData(gpu.ARRAY_BUFFER, spriteData, gpu.DYNAMIC_DRAW);
         gpu.activeTexture(gpu.TEXTURE0);
         gpu.bindTexture(gpu.TEXTURE_2D, texture);
         gpu.drawArrays(gpu.TRIANGLES, 0, 6);
+        if (fading) {
+            gpu.disable(gpu.BLEND);
+            gpu.uniform1f(spriteAlpha, 1);
+        }
     }
+}
+
+/** Camera-facing quad in viewport pixels. Null when the center is behind the camera. */
+export function projectBillboard(
+    position: Vec3,
+    width: number,
+    height: number,
+    camera: Camera3D,
+    viewport: { x: number; y: number; width: number; height: number },
+): ScreenRect | null {
+    const basis = cameraBasis(camera);
+    const dx = position.x - camera.position.x;
+    const dy = position.y - camera.position.y;
+    const dz = position.z - camera.position.z;
+    const vx = basis.right.x * dx + basis.right.y * dy + basis.right.z * dz;
+    const vy = basis.up.x * dx + basis.up.y * dy + basis.up.z * dz;
+    const vz = basis.forward.x * dx + basis.forward.y * dy + basis.forward.z * dz;
+    if (vz <= NEAR_PLANE) {
+        return null;
+    }
+    const focal = 1 / Math.tan(camera.fov / 2);
+    const aspect = viewport.width / viewport.height;
+    const ndcX = (focal / aspect) * vx / vz;
+    const ndcY = focal * vy / vz;
+    const pixelsPerUnit = focal * (viewport.height / 2) / vz;
+    const screenWidth = width * pixelsPerUnit;
+    const screenHeight = height * pixelsPerUnit;
+    const centerX = viewport.x + (ndcX + 1) * 0.5 * viewport.width;
+    const centerY = viewport.y + (1 - ndcY) * 0.5 * viewport.height;
+    return {
+        x: centerX - screenWidth / 2,
+        y: centerY - screenHeight / 2,
+        width: screenWidth,
+        height: screenHeight,
+        depth: vz,
+    };
 }
 
 function writeBillboard(billboard: Billboard3D, basis: { right: Vec3; up: Vec3 }): void {
@@ -736,6 +798,7 @@ function initPrograms(gpu: WebGLRenderingContext): void {
     spriteViewProj = gpu.getUniformLocation(spriteProgram, "u_viewProj");
     spriteSampler = gpu.getUniformLocation(spriteProgram, "u_texture");
     spriteRepeat = gpu.getUniformLocation(spriteProgram, "u_repeatV");
+    spriteAlpha = gpu.getUniformLocation(spriteProgram, "u_alpha");
     spriteFog = fogLocations(gpu, spriteProgram);
 
     triBuffer = gpu.createBuffer();
