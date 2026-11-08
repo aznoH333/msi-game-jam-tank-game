@@ -1,6 +1,6 @@
 import { adjustOverclock, getOverclockedTurretStats, type TurretCombatStats } from "../building/vehicleUtils";
 import type { PlacedTile } from "../building/types/tiles";
-import { drawRect } from "../drawing/canvas";
+import { drawRect, strokeRect } from "../drawing/canvas";
 import { drawText, measureText } from "../drawing/text";
 import { SIDEBAR_CONTENT_TOP, SIDEBAR_WIDTH, type Bounds } from "./buildingSidebar";
 
@@ -21,15 +21,28 @@ const EFFECT_FIELDS: {
     { key: "failChance", stat: "failChance", label: "Fail chance" },
 ];
 
-const BUTTON_SIZE = 28;
+const CARD_INSET = 8;
+const CARD_PAD_X = 12;
+const CARD_PAD_Y = 12;
+const CARD_GAP = 12;
+const NAME_BLOCK = 32;
+const COST_BLOCK = 24;
+const NAME_FONT = "22px sans-serif";
+const COST_FONT = "16px sans-serif";
+const VALUE_FONT = "18px sans-serif";
+const STAT_FONT = "16px sans-serif";
+const BUTTON_SIZE = 30;
 const BUTTON_GAP = 8;
-const EFFECT_ROW = 22;
-const CHANCE_ROW = 34;
-const CHANCE_FONT = "22px sans-serif";
-const CHANCE_COLOR = "#ff8c1a";
+const EFFECT_ROW = 24;
+const CHANCE_ROW = 30;
+const CHANCE_FONT = "20px sans-serif";
+const CHANCE_COLOR = "#ff9a3c";
+const CARD_FILL = "#141820";
+const CARD_EDGE = "#4a5568";
 
 export interface OverclockCard {
     index: number;
+    card: Bounds;
     track: Bounds;
     minus: Bounds;
     plus: Bounds;
@@ -58,6 +71,13 @@ function formatStat(value: number): string {
     return String(Math.round(value * 1000) / 1000);
 }
 
+function moduleCostLabel(stepCost: number): string {
+    if (stepCost <= 0) {
+        return "Free";
+    }
+    return stepCost === 1 ? "1 module" : `${stepCost} modules`;
+}
+
 /** 0.03 displays as 3%. */
 function formatChance(chance: number): string {
     return `${Math.round(chance * 1000) / 10}%`;
@@ -69,31 +89,40 @@ export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[]
     }
 
     const cards: OverclockCard[] = [];
+    const innerLeft = CARD_INSET + CARD_PAD_X;
+    const innerRight = SIDEBAR_WIDTH - CARD_INSET - CARD_PAD_X;
     let y = SIDEBAR_CONTENT_TOP;
     for (let index = 0; index < placed.overclocks.length; index++) {
         const slider = placed.overclocks[index].base;
-        y += 24;
-        const minus = { x: PADDING, y, width: BUTTON_SIZE, height: BUTTON_SIZE };
+        const cardY = y;
+        const buttonY = cardY + CARD_PAD_Y + NAME_BLOCK + COST_BLOCK;
+        const minus = { x: innerLeft, y: buttonY, width: BUTTON_SIZE, height: BUTTON_SIZE };
         const plus = {
-            x: SIDEBAR_WIDTH - PADDING - BUTTON_SIZE,
-            y,
+            x: innerRight - BUTTON_SIZE,
+            y: buttonY,
             width: BUTTON_SIZE,
             height: BUTTON_SIZE,
         };
         const track = {
             x: minus.x + BUTTON_SIZE + BUTTON_GAP,
-            y: y + (BUTTON_SIZE - 18) / 2,
+            y: buttonY + (BUTTON_SIZE - 18) / 2,
             width: plus.x - BUTTON_GAP - (minus.x + BUTTON_SIZE + BUTTON_GAP),
             height: 18,
         };
-        y += BUTTON_SIZE;
+        let body = buttonY + BUTTON_SIZE + 12;
         for (const field of EFFECT_FIELDS) {
             if (slider[field.key] !== undefined) {
-                y += field.key === "jamChance" || field.key === "failChance" ? CHANCE_ROW : EFFECT_ROW;
+                body += field.key === "jamChance" || field.key === "failChance" ? CHANCE_ROW : EFFECT_ROW;
             }
         }
-        y += 16;
-        cards.push({ index, track, minus, plus });
+        const card = {
+            x: CARD_INSET,
+            y: cardY,
+            width: SIDEBAR_WIDTH - CARD_INSET * 2,
+            height: body + CARD_PAD_Y - cardY,
+        };
+        y = card.y + card.height + CARD_GAP;
+        cards.push({ index, card, track, minus, plus });
     }
     return cards;
 }
@@ -104,8 +133,8 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
             text: "Select a placed turret",
             x: PADDING,
             y: SIDEBAR_CONTENT_TOP,
-            font: "16px sans-serif",
-            color: "#a8a49a",
+            font: "18px sans-serif",
+            color: "#d7d5cf",
             align: "left",
             baseline: "top",
         });
@@ -117,23 +146,57 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
     for (const card of cards) {
         const instance = placed.overclocks[card.index];
         const adjusted = getOverclockedTurretStats(turret, [instance]);
-        const nameY = card.minus.y - 24;
+        const innerLeft = card.card.x + CARD_PAD_X;
+        const innerRight = card.card.x + card.card.width - CARD_PAD_X;
+        const nameY = card.card.y + CARD_PAD_Y;
+        const costY = nameY + NAME_BLOCK;
+
+        drawRect({
+            x: card.card.x,
+            y: card.card.y,
+            width: card.card.width,
+            height: card.card.height,
+            color: CARD_FILL,
+        });
+        strokeRect({
+            x: card.card.x + 0.5,
+            y: card.card.y + 0.5,
+            width: card.card.width - 1,
+            height: card.card.height - 1,
+            color: CARD_EDGE,
+        });
+        drawRect({
+            x: card.card.x,
+            y: card.card.y,
+            width: 4,
+            height: card.card.height,
+            color: "#e6c07b",
+        });
 
         drawText({
             text: instance.base.name,
-            x: PADDING,
+            x: innerLeft,
             y: nameY,
-            font: "16px sans-serif",
-            color: "#eceae4",
+            font: NAME_FONT,
+            color: "#ffffff",
+            align: "left",
+            baseline: "top",
+        });
+        drawText({
+            text: moduleCostLabel(instance.base.stepCost),
+            x: innerLeft,
+            y: costY,
+            font: COST_FONT,
+            color: "#8ecbff",
             align: "left",
             baseline: "top",
         });
         drawText({
             text: formatStat(instance.value),
-            x: SIDEBAR_WIDTH - PADDING,
-            y: nameY,
-            font: "16px sans-serif",
-            color: "#eceae4",
+            x: innerRight,
+            y: costY,
+            font: VALUE_FONT,
+            color: "#ffffff",
             align: "right",
             baseline: "top",
         });
@@ -167,13 +230,13 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
         drawStepButton(card.plus, "+", adjustOverclock(instance, 1, modules) !== null);
 
         // this slider's stat effects: base value, then the overclocked value
-        let effectY = card.minus.y + card.minus.height + 10;
+        let effectY = card.minus.y + card.minus.height + 12;
         for (const field of EFFECT_FIELDS) {
             if (instance.base[field.key] === undefined) {
                 continue;
             }
             const chance = field.stat === "jamChance" || field.stat === "failChance";
-            const valueFont = chance ? CHANCE_FONT : "14px sans-serif";
+            const valueFont = chance ? CHANCE_FONT : STAT_FONT;
             let baseText: string;
             let nextText: string;
             if (field.stat === "jamChance" || field.stat === "failChance") {
@@ -183,18 +246,17 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 baseText = formatStat(turret[field.stat]);
                 nextText = formatStat(adjusted[field.stat]);
             }
-            const nextColor = chance ? CHANCE_COLOR : nextText === baseText ? "#eceae4" : "#e6c07b";
+            const nextColor = chance ? CHANCE_COLOR : nextText === baseText ? "#ffffff" : "#e6c07b";
             const arrow = " -> ";
-            const right = SIDEBAR_WIDTH - PADDING;
-            const nextX = right - measureText(nextText, valueFont);
+            const nextX = innerRight - measureText(nextText, valueFont);
             const arrowX = nextX - measureText(arrow, valueFont);
             const baseX = arrowX - measureText(baseText, valueFont);
             drawText({
                 text: field.label,
-                x: PADDING,
+                x: innerLeft,
                 y: effectY,
-                font: chance ? CHANCE_FONT : "14px sans-serif",
-                color: chance ? CHANCE_COLOR : "#a8a49a",
+                font: valueFont,
+                color: chance ? CHANCE_COLOR : "#d7d5cf",
                 align: "left",
                 baseline: "top",
             });
@@ -203,7 +265,7 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 x: baseX,
                 y: effectY,
                 font: valueFont,
-                color: chance ? CHANCE_COLOR : "#eceae4",
+                color: chance ? CHANCE_COLOR : "#ffffff",
                 align: "left",
                 baseline: "top",
             });
@@ -212,7 +274,7 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
                 x: arrowX,
                 y: effectY,
                 font: valueFont,
-                color: chance ? CHANCE_COLOR : "#a8a49a",
+                color: chance ? CHANCE_COLOR : "#d7d5cf",
                 align: "left",
                 baseline: "top",
             });

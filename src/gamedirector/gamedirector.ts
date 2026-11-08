@@ -1,39 +1,45 @@
 import { getGameState } from "../game/gameState";
 import { requestTransition } from "../game/screenTransition";
 import { markShopCheckpoint, rewindToCheckpoint } from "./checkpoint";
+import { nextEvent, noteShopEntered, rollShopEvery } from "./schedule";
 
 /**
  * A stage in this context refers to the event number that has taken place.
- * 
- * Based on this number the game director decides what should be the next event
+ *
+ * Travel always sits between a shop and a fight. Fights come from the player's tier.
  */
 export type EventType = "SHOP" | "TRAVEL" | "COMBAT" | "EXPLORATION";
-
-const EVENT_LOOP: EventType[] = ["SHOP", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL", "COMBAT", "TRAVEL"];
-
-
 
 export interface GameDirector {
     eventIndex: number;
     /** When the player dies they are restored to this event */
     lastCheckPoint: number;
     currentEventType: EventType;
-    enemyIndex: number;
+    /** Enemy catalog tier the player is fighting through. */
+    tier: number;
+    /** Regular fights won in this tier. The next fight is the boss at 5. */
+    combatsThisTier: number;
+    /** Regular fights won since the player last stood in a shop. */
+    fightsSinceShop: number;
+    /** Shop after this many regular fights. 2 or 3. */
+    shopEvery: number;
+    /** The next stop after travel is the shop that follows a boss. */
+    bossShopPending: boolean;
 }
-
 
 /** Inits empty game director ("new game") */
 export function initGameDirector(): GameDirector {
     return {
         eventIndex: 0,
         lastCheckPoint: 0,
-        enemyIndex: 0,
-        currentEventType: "SHOP" 
-    }
+        currentEventType: "SHOP",
+        tier: 0,
+        combatsThisTier: 0,
+        fightsSinceShop: 0,
+        shopEvery: rollShopEvery(),
+        bossShopPending: false,
+    };
 }
-
-
-
 
 let attempt = 0;
 
@@ -46,22 +52,17 @@ export function beginAttempt(): void {
     attempt += 1;
 }
 
-/** The next fight draws from the next enemy-catalog range. */
-export function advanceEnemyIndex(): void {
-    getGameState().gameDirector.enemyIndex += 1;
-}
-
 /** The shop the player is standing in becomes the place death sends them back to. */
 export function rememberShopCheckpoint(): void {
     markShopCheckpoint(getGameState().gameDirector);
 }
 
-/** Death in a fight or a maze. Full heal, then the last shop. */
+/** Death in a fight or a maze. Full heal, then the last shop. Tier progress stays. */
 export function restoreCheckpoint(): void {
     requestTransition(() => {
         beginAttempt();
         const state = getGameState();
-        rewindToCheckpoint(state.gameDirector, state.playerData, getEventTypeForIndex);
+        rewindToCheckpoint(state.gameDirector, state.playerData);
         state.currentScreen = screenForEvent(state.gameDirector.currentEventType);
     });
 }
@@ -70,20 +71,28 @@ export function transitionToNextEvent() {
     requestTransition(() => {
         const state = getGameState();
         const director = state.gameDirector;
-        director.eventIndex++;
-        director.currentEventType = getEventTypeForIndex(director.eventIndex);
-        state.currentScreen = screenForEvent(director.currentEventType);
+        const next = nextEvent(director);
+        director.eventIndex += 1;
+        director.currentEventType = next;
+        if (next === "SHOP") {
+            noteShopEntered(director);
+        }
+        state.currentScreen = screenForEvent(next);
     });
 }
 
 /** The travel stop offers this when the next event is an exploration. */
 export function chooseExploration(choice: "explore" | "skip"): void {
+    if (choice === "skip") {
+        transitionToNextEvent();
+        return;
+    }
     requestTransition(() => {
         const state = getGameState();
         const director = state.gameDirector;
-        director.eventIndex += choice === "explore" ? 1 : 2;
-        director.currentEventType = getEventTypeForIndex(director.eventIndex);
-        state.currentScreen = screenForEvent(director.currentEventType);
+        director.eventIndex += 1;
+        director.currentEventType = "EXPLORATION";
+        state.currentScreen = "EXPLORATION_SCREEN";
     });
 }
 
@@ -97,11 +106,7 @@ function screenForEvent(eventType: EventType): "BUILDING_SCREEN" | "COMBAT_SCREE
     return "COMBAT_SCREEN";
 }
 
-export function getEventTypeForIndex(eventIndex: number): EventType {
-    return EVENT_LOOP[eventIndex % EVENT_LOOP.length];
-}
-
 /** The event that follows the current one. Does not advance the director. */
 export function getNextEventType(): EventType {
-    return getEventTypeForIndex(getGameState().gameDirector.eventIndex + 1);
+    return nextEvent(getGameState().gameDirector);
 }

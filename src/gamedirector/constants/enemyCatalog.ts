@@ -3,9 +3,10 @@ import { vehicleFromSave, type SavedVehicle } from "../../building/vehicleSave";
 
 export interface EnemyCatalogRecord {
     fileName: string;
-    earliestAppearance: number;
-    latestAppearance: number;
+    vehicleTier: number;
+    isBoss: boolean;
     moneyDropped: number;
+
 }
 
 export interface PickedEnemy {
@@ -22,11 +23,6 @@ const enemyVehicleFiles = import.meta.glob("../../../assets/enemies/*.json", {
 
 
 
-const TIER_1_START = 1;
-const TIER_2_START = 7;
-const TIER_3_START = 15;
-const TIER_4_START = 20
-
 
 
 export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
@@ -34,126 +30,129 @@ export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
     
     { // intro enemy
         fileName: "small_1.json",
-        earliestAppearance: 0,
-        latestAppearance: 2,
         moneyDropped: 2000,
-
+        vehicleTier: 0,
+        isBoss: true,
     },
+
     { // t1
         fileName: "t1_small_2.json",
-        earliestAppearance: TIER_1_START,
-        latestAppearance: TIER_2_START - 2,
         moneyDropped: 2500,
+        vehicleTier: 1,
+        isBoss: false
     },
     {
         fileName: "t1_cannon.json",
-        earliestAppearance: TIER_1_START,
-        latestAppearance: TIER_2_START - 2,
         moneyDropped: 2500,
+        vehicleTier: 1,
+        isBoss: false,
     },
     {
         fileName: "t1_medium.json",
-        earliestAppearance: TIER_1_START + 3,
-        latestAppearance: TIER_2_START - 2,
+        vehicleTier: 1,
+        isBoss: false,
         moneyDropped: 3000,
     },
     { // t1 boss
         fileName: "t1_large.json",
-        earliestAppearance: TIER_2_START - 1,
-        latestAppearance: TIER_2_START - 1,
+        vehicleTier: 1,
+        isBoss: true,
         moneyDropped: 5000,
     },
     
     
     { // t2
         fileName: "t2_small.json",
-        earliestAppearance: TIER_2_START,
-        latestAppearance: TIER_3_START - 2,
+        vehicleTier: 2,
+        isBoss: false,
         moneyDropped: 3500,
     },
     {
         fileName: "t2_mortar.json",
-        earliestAppearance: TIER_2_START,
-        latestAppearance: TIER_3_START - 2,
+        vehicleTier: 2,
+        isBoss: false,
         moneyDropped: 3500,
     },
     {
         fileName: "t2_gunner.json",
-        earliestAppearance: TIER_2_START,
-        latestAppearance: TIER_3_START - 2,
+        vehicleTier: 2,
+        isBoss: false,
         moneyDropped: 3500,
     },
     { // t2 boss
         fileName: "t2_large.json",
-        earliestAppearance: TIER_3_START - 1,
-        latestAppearance: TIER_3_START - 1,
+        vehicleTier: 2,
+        isBoss: true,
         moneyDropped: 6000,
     },
 
     
     { // t3
         fileName: "t3_small.json",
-        earliestAppearance: TIER_3_START,
-        latestAppearance: TIER_4_START - 2,
+        vehicleTier: 3,
+        isBoss: false,
         moneyDropped: 4000,
     },
     { 
         fileName: "t3_small_2.json",
-        earliestAppearance: TIER_3_START,
-        latestAppearance: TIER_4_START - 2,
+        vehicleTier: 3,
+        isBoss: false,
         moneyDropped: 4000,
     },
     { 
         fileName: "t3_mortar.json",
-        earliestAppearance: TIER_3_START,
-        latestAppearance: TIER_4_START - 2,
+        vehicleTier: 3,
+        isBoss: false,
         moneyDropped: 5000,
     },
     {  // t3 boss
         fileName: "t3_large.json",
-        earliestAppearance: TIER_4_START - 1,
-        latestAppearance: TIER_4_START - 1,
+        vehicleTier: 3,
+        isBoss: true,
         moneyDropped: 10000,
     },
 
 
     { // t4
         fileName: "t4_medium.json",
-        earliestAppearance: TIER_4_START,
-        latestAppearance: TIER_4_START,
+        vehicleTier: 4,
+        isBoss: false,
         moneyDropped: 5000,
     },
     { // t4
         fileName: "t4_missile.json",
-        earliestAppearance: TIER_4_START + 1,
-        latestAppearance: TIER_4_START + 1,
+        vehicleTier: 4,
+        isBoss: false,
         moneyDropped: 5000,
     },
     { // cannon brick
         fileName: "t4_cannon_brick.json",
-        earliestAppearance: TIER_4_START + 2,
-        latestAppearance: TIER_4_START + 2,
+        vehicleTier: 4,
+        isBoss: false,
         moneyDropped: 5000,
     },
     
     // final boss
     {
         fileName: "final_boss.json",
-        earliestAppearance: TIER_4_START + 3,
-        latestAppearance: TIER_4_START + 3,
+        vehicleTier: 4,
+        isBoss: true,
         moneyDropped: 0,
 
     }
 ];
 
-/** A catalog tank whose appearance range includes this enemy index. */
-export function pickEnemyVehicle(enemyIndex: number): PickedEnemy {
-    const available = ENEMY_CATALOG.filter((record) => {
-        return enemyIndex >= record.earliestAppearance && enemyIndex <= record.latestAppearance;
-    });
+/** True when this tier has fights other than its boss. */
+export function tierHasRegulars(tier: number): boolean {
+    return ENEMY_CATALOG.some((record) => record.vehicleTier === tier && !record.isBoss);
+}
+
+/** A random tank from this tier. Boss picks the tier boss. An empty tier uses the last one that has that role. */
+export function pickEnemyVehicle(tier: number, boss: boolean): PickedEnemy {
+    const available = enemiesAt(tier, boss);
     const record = available[Math.floor(Math.random() * available.length)];
     if (!record) {
-        throw new Error(`No enemy is available at enemy index ${enemyIndex}`);
+        throw new Error(`No ${boss ? "boss" : "enemy"} is available at tier ${tier}`);
     }
     const vehicle = Object.entries(enemyVehicleFiles).find(([path]) => path.endsWith(`/${record.fileName}`))?.[1];
     if (!vehicle) {
@@ -163,4 +162,14 @@ export function pickEnemyVehicle(enemyIndex: number): PickedEnemy {
         vehicle: vehicleFromSave(vehicle),
         moneyDropped: record.moneyDropped,
     };
+}
+
+function enemiesAt(tier: number, boss: boolean): EnemyCatalogRecord[] {
+    const exact = ENEMY_CATALOG.filter((record) => record.vehicleTier === tier && record.isBoss === boss);
+    if (exact.length > 0) {
+        return exact;
+    }
+    const tiers = ENEMY_CATALOG.map((record) => record.vehicleTier);
+    const fallback = Math.max(...tiers.filter((value) => value <= tier), Math.min(...tiers));
+    return ENEMY_CATALOG.filter((record) => record.vehicleTier === fallback && record.isBoss === boss);
 }

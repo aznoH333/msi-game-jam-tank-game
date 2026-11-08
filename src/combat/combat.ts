@@ -8,8 +8,9 @@ import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
 import { unlockVehicleTiles } from "../game/playerData";
-import { pickEnemyVehicle } from "../gamedirector/constants/enemyCatalog";
-import { advanceEnemyIndex, directorAttempt, getEventTypeForIndex, transitionToNextEvent } from "../gamedirector/gamedirector";
+import { pickEnemyVehicle, tierHasRegulars } from "../gamedirector/constants/enemyCatalog";
+import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
+import { combatIsBoss, recordCombatVictory } from "../gamedirector/schedule";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawHealthBar, drawViewEnergy, layoutAbilityButtons, repairButtonBounds } from "./abilityBar";
 import {
@@ -60,6 +61,7 @@ const WEAPON_KEY_COUNT = 9;
 
 let encounterEvent = -1;
 let combatAttempt = -1;
+let encounterBoss = false;
 let battle: Battle | null = null;
 let moneyAwarded = false;
 let leftWasDown = false;
@@ -253,16 +255,10 @@ function drawExplosion(camera: CombatCamera, explosion: Explosion, growth: numbe
     setDrawClip(previousClip);
 }
 
-function isFirstCombat(eventIndex: number): boolean {
-    if (getEventTypeForIndex(eventIndex) !== "COMBAT") {
-        return false;
-    }
-    for (let index = 0; index < eventIndex; index++) {
-        if (getEventTypeForIndex(index) === "COMBAT") {
-            return false;
-        }
-    }
-    return true;
+/** The tier 0 intro fight, including a retry before that boss goes down. */
+function isFirstCombat(): boolean {
+    const director = getGameState().gameDirector;
+    return director.tier === 0 && director.combatsThisTier === 0;
 }
 
 /** Player and enemy share this update. Only the supplied input can start a shot. */
@@ -272,10 +268,12 @@ export function updateCombat(): void {
     if (!battle || encounterEvent !== state.gameDirector.eventIndex || combatAttempt !== directorAttempt()) {
         encounterEvent = state.gameDirector.eventIndex;
         combatAttempt = directorAttempt();
-        const picked = pickEnemyVehicle(state.gameDirector.enemyIndex);
+        const bossFight = combatIsBoss(state.gameDirector, tierHasRegulars(state.gameDirector.tier));
+        encounterBoss = bossFight;
+        const picked = pickEnemyVehicle(state.gameDirector.tier, bossFight);
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
-        if (isFirstCombat(encounterEvent)) {
+        if (isFirstCombat()) {
             startFirstCombatTutorial();
         }
         targetingRepair = false;
@@ -402,7 +400,7 @@ export function updateCombat(): void {
     if (fight.result === "victory" && !moneyAwarded) {
         state.playerData.money += fight.moneyDropped;
         unlockVehicleTiles(state.playerData, fight.enemy.instance.base);
-        advanceEnemyIndex();
+        recordCombatVictory(state.gameDirector, encounterBoss);
         moneyAwarded = true;
     }
 

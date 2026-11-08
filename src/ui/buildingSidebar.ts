@@ -214,6 +214,8 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
 
         const iconX = entry.bounds.x + 12 + iconSize / 2;
         const iconY = entry.bounds.y + entry.bounds.height / 2;
+        const unlocked = unlockedTiles.includes(entry.tile.tileName);
+        const iconColor = unlocked ? undefined : "#000000";
         drawSprite({
             sprite: tileSpriteAt(entry.tile.tileSprite, 0, 0),
             x: iconX,
@@ -221,6 +223,7 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
             scaleX: iconScale,
             scaleY: iconScale,
             zIndex: 3,
+            color: iconColor,
         });
         if (entry.tile.turret) {
             drawSprite({
@@ -232,10 +235,10 @@ export function drawBuildingSidebar(layout: SidebarLayout, selected: BaseTile | 
                 originX: entry.tile.turret.spriteCenterX,
                 originY: entry.tile.turret.spriteCenterY,
                 zIndex: 4,
+                color: iconColor,
             });
         }
 
-        const unlocked = unlockedTiles.includes(entry.tile.tileName);
         drawText({
             text: unlocked ? entry.tile.tileName : "???",
             x: entry.bounds.x + 12 + iconSize + 12,

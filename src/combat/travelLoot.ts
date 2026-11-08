@@ -18,7 +18,24 @@ export interface StreetLoot {
     x: number;
     z: number;
     kind: LootKind;
-    reward: LootReward;
+}
+
+/** Modules the player should be holding at the end of a tier. Tier 1 is 5, tier 2 is 10. */
+export const MODULES_PER_TIER = 5;
+
+export function recommendedModules(tier: number): number {
+    return MODULES_PER_TIER * Math.max(0, tier);
+}
+
+/**
+ * Rolled when a container is opened.
+ * Below the tier's module target, the find is an even chance of a module or money. At the target, it is money.
+ */
+export function rollLootReward(modulesOwned: number, tier: number, roll: number): LootReward {
+    if (modulesOwned < recommendedModules(tier) && roll < 0.5) {
+        return { kind: "module", amount: 1 };
+    }
+    return { kind: "money", amount: LOOT_MONEY };
 }
 
 const LOOT_FRAMES: Record<LootKind, readonly [string, string]> = {
@@ -27,7 +44,7 @@ const LOOT_FRAMES: Record<LootKind, readonly [string, string]> = {
     crate: ["world/loot/crate", "world/loot/crate_blink"],
 };
 
-/** Containers parked on one trip. The same event index always lays down the same ones. */
+/** Containers parked on one trip. The same event always lays down the same ones. */
 export function streetLoot(eventIndex: number, laneHalf: number, endZ: number): StreetLoot[] {
     const loot: StreetLoot[] = [];
     const last = Math.floor(endZ / LOOT_SPACING);
@@ -43,13 +60,11 @@ export function streetLoot(eventIndex: number, laneHalf: number, endZ: number): 
         }
         const across = ((seed >>> 8) % 1000) / 999;
         const kind = LOOT_KINDS[mixHash(seed ^ 0x85ebca6b) % LOOT_KINDS.length];
-        const module = (seed >>> 16) % 2 === 0;
         loot.push({
             index,
             x: (across * 2 - 1) * laneHalf,
             z,
             kind,
-            reward: module ? { kind: "module", amount: 1 } : { kind: "money", amount: LOOT_MONEY },
         });
     }
     return loot;

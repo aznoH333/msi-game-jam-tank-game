@@ -5,7 +5,7 @@ import type { BaseVehicle } from "../src/building/types/vehicle";
 import { FAIL_DAMAGE_OF_MAX_HEALTH, JAM_ENERGY_MULTIPLIER, OPENING_FIRE_DELAY, REPAIR_DURATION } from "../src/combat/constants";
 import { FAULT_ICON_DURATION, iconFlashAlpha } from "../src/combat/statusIcons";
 import { combatMatch } from "../src/combat/testHarness";
-import { lootSprite, streetLoot } from "../src/combat/travelLoot";
+import { lootSprite, recommendedModules, rollLootReward, streetLoot } from "../src/combat/travelLoot";
 
 function block(x: number, y: number, health: number): PlacedTile {
     return {
@@ -434,14 +434,21 @@ describe("combat loop", () => {
 });
 
 describe("travel loot", () => {
-    it("lays the same containers down for a trip, paying money or one module", () => {
-        const first = streetLoot(2, 5, 108);
-        assert.deepEqual(streetLoot(2, 5, 108), first);
-        assert.ok(first.length > 0);
-        const rewards = [0, 1, 2, 3, 4, 5].flatMap((event) => streetLoot(event, 5, 108).map((piece) => piece.reward));
-        assert.ok(rewards.some((reward) => reward.kind === "money" && reward.amount === 500));
-        assert.ok(rewards.some((reward) => reward.kind === "module" && reward.amount === 1));
-        assert.notDeepEqual(streetLoot(3, 5, 108), first);
+    it("lays the same containers down for a trip", () => {
+        const first = streetLoot(2, 5, 200);
+        assert.deepEqual(streetLoot(2, 5, 200), first);
+        assert.ok(first.length > 1);
+        assert.notDeepEqual(streetLoot(4, 5, 200).map((piece) => piece.z), first.map((piece) => piece.z));
+    });
+
+    it("pays a module only while the player is under 5 per tier, on an even coin flip", () => {
+        assert.equal(recommendedModules(1), 5);
+        assert.equal(recommendedModules(2), 10);
+        assert.deepEqual(rollLootReward(4, 1, 0.1), { kind: "module", amount: 1 });
+        assert.deepEqual(rollLootReward(4, 1, 0.5), { kind: "money", amount: 500 });
+        assert.deepEqual(rollLootReward(5, 1, 0.1), { kind: "money", amount: 500 });
+        assert.deepEqual(rollLootReward(9, 2, 0), { kind: "module", amount: 1 });
+        assert.deepEqual(rollLootReward(10, 2, 0), { kind: "money", amount: 500 });
     });
 
     it("holds each loot blink frame for half a second", () => {

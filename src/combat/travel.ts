@@ -10,7 +10,7 @@ import { getGameState } from "../game/gameState";
 import { chooseExploration, directorAttempt, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
-import { lootIcon, lootLabel, lootSprite, streetLoot, LOOT_FADE_SECONDS, LOOT_POPUP_SECONDS, type LootReward, type StreetLoot } from "./travelLoot";
+import { lootIcon, lootLabel, lootSprite, rollLootReward, streetLoot, LOOT_FADE_SECONDS, LOOT_POPUP_SECONDS, type LootReward, type StreetLoot } from "./travelLoot";
 import { drawCombatVehicle } from "./combatView";
 import type { VehicleInstance } from "./types/vehicleInstance";
 
@@ -22,8 +22,9 @@ const CAMERA_HEIGHT = 1.5;
 const STREET_CURVE = 0.004;
 const BLOCK_DEPTH = 7;
 const STREET_HALF = 6.2;
-/** World z of the event sprite the tank drives up to. Far enough that the drive lasts a while before it crests the horizon. */
-const BILLBOARD_Z = 120;
+/** How long a drive lasts, picked again each trip. */
+const TRAVEL_MIN_SECONDS = 5;
+const TRAVEL_MAX_SECONDS = 20;
 /** How far in front of the sprite the camera stops. */
 const STOP_AHEAD = 10;
 const EVENT_WIDTH = 6;
@@ -66,8 +67,16 @@ let travelAttempt = -1;
 let travelTime = 0;
 let lastUpdateMs = 0;
 let travelLeftWasDown = false;
-/** Container index -> travel time it was opened. */
-const openedLoot = new Map<number, number>();
+/** World z where the camera stops, and where the event sprite stands. */
+let travelStopZ = 0;
+let eventZ = 0;
+
+interface OpenedLoot {
+    at: number;
+    reward: LootReward;
+}
+/** Container index -> when it was opened, and what it paid. */
+const openedLoot = new Map<number, OpenedLoot>();
 
 /** Combat layout with a first-person street in place of the enemy tank. */
 export function updateTravel(): void {
@@ -80,11 +89,12 @@ export function updateTravel(): void {
         lastUpdateMs = now;
         travelLeftWasDown = isMouseButtonDown(0);
         openedLoot.clear();
+        beginTravelStretch();
     }
     const dt = Math.min(0.05, Math.max(0, (now - lastUpdateMs) / 1000));
     lastUpdateMs = now;
     travelTime += dt;
-    const stopZ = BILLBOARD_Z - STOP_AHEAD;
+    const stopZ = travelStopZ;
     setEngineBlend(driveSpeed(travelTime, stopZ) / DRIVE_SPEED);
 
     const viewWidth = GAME_WIDTH - ABILITY_BAR_WIDTH;
@@ -100,7 +110,7 @@ export function updateTravel(): void {
         pitch: -0.06,
         fov: Math.PI / 3,
     };
-    const loot = streetLoot(travelEvent, STREET_HALF - 0.9, BILLBOARD_Z - 12);
+    const loot = streetLoot(travelEvent, STREET_HALF - 0.9, eventZ - 12);
     drawScene3D({
         viewport: cityView,
         background: SKY_BOTTOM,
@@ -276,6 +286,20 @@ function travelButtonLabel(next: EventType): string {
     return "Continue";
 }
 
+/** Pick a 5–20 second drive and remember how many modules the player brought. */
+function beginTravelStretch(): void {
+    const seconds = TRAVEL_MIN_SECONDS + Math.random() * (TRAVEL_MAX_SECONDS - TRAVEL_MIN_SECONDS);
+    travelStopZ = distanceForDriveSeconds(seconds);
+    eventZ = travelStopZ + STOP_AHEAD;
+}
+
+/** Distance that the ramp-up, cruise, and ramp-down cover in `seconds`. */
+function distanceForDriveSeconds(seconds: number): number {
+    const cruise = Math.max(0, seconds - RAMP_TIME * 2);
+    const rampDistance = DRIVE_SPEED * RAMP_TIME / 2;
+    return rampDistance * 2 + DRIVE_SPEED * cruise;
+}
+
 /** Speed along the same ramp driveDistance integrates. */
 function driveSpeed(elapsed: number, distance: number): number {
     const fullRamp = DRIVE_SPEED * RAMP_TIME / 2;
@@ -334,9 +358,9 @@ function lootBillboards(cameraZ: number, loot: readonly StreetLoot[]): Billboard
         if (piece.z < cameraZ - 3 || piece.z > cameraZ + horizon * 1.35) {
             continue;
         }
-        const openedAt = openedLoot.get(piece.index);
-        const age = openedAt === undefined ? 0 : travelTime - openedAt;
-        if (openedAt !== undefined && age >= LOOT_FADE_SECONDS) {
+        const opened = openedLoot.get(piece.index);
+        const age = opened === undefined ? 0 : travelTime - opened.at;
+        if (opened !== undefined && age >= LOOT_FADE_SECONDS) {
             continue;
         }
         billboards.push({
@@ -344,7 +368,7 @@ function lootBillboards(cameraZ: number, loot: readonly StreetLoot[]): Billboard
             width: LOOT_WIDTH,
             height: LOOT_HEIGHT,
             sprite: lootSprite(piece.kind, travelTime, piece.index),
-            alpha: openedAt === undefined ? 1 : 1 - age / LOOT_FADE_SECONDS,
+            alpha: opened === undefined ? 1 : 1 - age / LOOT_FADE_SECONDS,
         });
     }
     return billboards;
@@ -388,13 +412,14 @@ function openLoot(
     if (!best) {
         return;
     }
-    openedLoot.set(best.index, travelTime);
+    const state = getGameState();
+    const reward = rollLootReward(state.playerData.overclockModules, state.gameDirector.tier, Math.random());
+    openedLoot.set(best.index, { at: travelTime, reward });
     playSound("misc/loot_opened");
-    const player = getGameState().playerData;
-    if (best.reward.kind === "money") {
-        player.money += best.reward.amount;
+    if (reward.kind === "money") {
+        state.playerData.money += reward.amount;
     } else {
-        player.overclockModules += best.reward.amount;
+        state.playerData.overclockModules += reward.amount;
     }
 }
 
@@ -405,11 +430,11 @@ function drawLootPopups(
     loot: readonly StreetLoot[],
 ): void {
     for (const piece of loot) {
-        const openedAt = openedLoot.get(piece.index);
-        if (openedAt === undefined) {
+        const opened = openedLoot.get(piece.index);
+        if (opened === undefined) {
             continue;
         }
-        const age = travelTime - openedAt;
+        const age = travelTime - opened.at;
         if (age >= LOOT_POPUP_SECONDS) {
             continue;
         }
@@ -424,7 +449,7 @@ function drawLootPopups(
             continue;
         }
         const fade = age < 0.8 ? 1 : 1 - (age - 0.8) / (LOOT_POPUP_SECONDS - 0.8);
-        drawLootPopup(screen.x + screen.width / 2, screen.y - 8 - age * 36, piece.reward, fade);
+        drawLootPopup(screen.x + screen.width / 2, screen.y - 8 - age * 36, opened.reward, fade);
     }
 }
 
@@ -487,7 +512,7 @@ function trashBillboards(cameraZ: number): Billboard3D[] {
         }
         const along = (mixHash(seed ^ 0x9e3779b1) % 1000) / 1000;
         const z = index * TRASH_SPACING + along * TRASH_SPACING * 0.7;
-        if (z > BILLBOARD_Z - 12) {
+        if (z > eventZ - 12) {
             continue;
         }
         const across = ((seed >>> 8) % 1000) / 999;
@@ -503,7 +528,7 @@ function trashBillboards(cameraZ: number): Billboard3D[] {
 
 function eventBillboard(cameraZ: number, next: EventType): Billboard3D {
     return {
-        position: bend({ x: 0, y: EVENT_CENTER_Y, z: BILLBOARD_Z }, cameraZ),
+        position: bend({ x: 0, y: EVENT_CENTER_Y, z: eventZ }, cameraZ),
         width: EVENT_WIDTH,
         height: EVENT_HEIGHT,
         sprite: eventSprite(next),
