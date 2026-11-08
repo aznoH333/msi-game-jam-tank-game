@@ -1,11 +1,15 @@
 import { stopEngine } from "../audio/audio";
+import { drawStillStreet } from "../combat/travel";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
-import { startNewGame, switchGameState } from "./gameState";
+import { openIntro } from "./storyScreen";
+import { switchGameState } from "./gameState";
 
 const BUTTON_WIDTH = 280;
 const BUTTON_HEIGHT = 64;
+const TITLE = "ARMORED EXODUS";
+const TITLE_FONT = "92px \"Russo One\", sans-serif";
 
 let leftWasDown = false;
 let startWasDown = false;
@@ -34,22 +38,7 @@ export function mainMenuUpdate(): void {
     leftWasDown = leftDown;
     startWasDown = startDown;
 
-    drawRect({
-        x: 0,
-        y: 0,
-        width: GAME_WIDTH,
-        height: GAME_HEIGHT,
-        color: "#141820",
-    });
-    drawText({
-        text: "Tank Game",
-        x: GAME_WIDTH / 2,
-        y: GAME_HEIGHT / 2 - 120,
-        font: "72px sans-serif",
-        color: "#eceae4",
-        align: "center",
-        baseline: "middle",
-    });
+    drawStillStreet({ x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT });
 
     const button = {
         x: GAME_WIDTH / 2 - BUTTON_WIDTH / 2,
@@ -57,6 +46,25 @@ export function mainMenuUpdate(): void {
         width: BUTTON_WIDTH,
         height: BUTTON_HEIGHT,
     };
+    const titleY = button.y - 88;
+    drawText({
+        text: TITLE,
+        x: GAME_WIDTH / 2 + 5,
+        y: titleY + 6,
+        font: TITLE_FONT,
+        color: "#140c08",
+        align: "center",
+        baseline: "middle",
+    });
+    drawText({
+        text: TITLE,
+        x: GAME_WIDTH / 2,
+        y: titleY,
+        font: TITLE_FONT,
+        color: "#f3efe4",
+        align: "center",
+        baseline: "middle",
+    });
     const hovered = mouse.x >= button.x
         && mouse.y >= button.y
         && mouse.x < button.x + button.width
@@ -79,6 +87,6 @@ export function mainMenuUpdate(): void {
     });
 
     if (startPressed || (leftPressed && hovered)) {
-        startNewGame();
+        openIntro();
     }
 }

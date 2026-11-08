@@ -19,7 +19,7 @@ export interface DialogChain {
     cards: TextCard[];
 }
 
-const CHARS_PER_SECOND = 60;
+export const CHARS_PER_SECOND = 60;
 const TALK_SOUND = "misc/talking";
 const NORMAL_HOLD_SECONDS = 3;
 const TALK_FRAME_SECONDS = 0.1;
@@ -52,7 +52,7 @@ let trackedTutorial = "";
 let placedGenerator = false;
 let placedBattery = false;
 
-export type ShopAction = "camera" | "name" | "go" | "erase" | "copy" | "tab" | "place" | "module" | "buy" | "overclock";
+export type ShopAction = "camera" | "name" | "go" | "erase" | "copy" | "tab" | "place" | "buy" | "overclock";
 
 export function startDialogChain(dialogIdentifier: string): void {
     const chain = dialogCatalog.find((entry) => entry.dialogIdentifier === dialogIdentifier);

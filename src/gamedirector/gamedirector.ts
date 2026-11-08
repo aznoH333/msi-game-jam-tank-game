@@ -17,14 +17,16 @@ export interface GameDirector {
     currentEventType: EventType;
     /** Enemy catalog tier the player is fighting through. */
     tier: number;
-    /** Regular fights won in this tier. The next fight is the boss at 5. */
+    /** Regular fights won in this tier. The next fight is the boss at 3. */
     combatsThisTier: number;
     /** Regular fights won since the player last stood in a shop. */
     fightsSinceShop: number;
-    /** Shop after this many regular fights. 2 or 3. */
+    /** Shop after this many regular fights. 1 or 2. */
     shopEvery: number;
     /** The next stop after travel is the shop that follows a boss. */
     bossShopPending: boolean;
+    /** The shop that sits in front of the final boss has already been visited. */
+    finalBossShopDone: boolean;
     /** Regular enemy file from the previous fight. The next regular fight avoids it when it can. */
     lastEnemyFile: string | null;
 }
@@ -40,6 +42,7 @@ export function initGameDirector(): GameDirector {
         fightsSinceShop: 0,
         shopEvery: rollShopEvery(),
         bossShopPending: false,
+        finalBossShopDone: false,
         lastEnemyFile: null,
     };
 }

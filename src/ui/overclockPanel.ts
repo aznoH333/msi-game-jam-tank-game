@@ -1,6 +1,7 @@
 import { adjustOverclock, getOverclockedTurretStats, type TurretCombatStats } from "../building/vehicleUtils";
 import type { PlacedTile } from "../building/types/tiles";
-import { drawRect, strokeRect } from "../drawing/canvas";
+import { driverPortraitFrame } from "../combat/abilityBar";
+import { drawRect, getDrawClip, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawText, measureText } from "../drawing/text";
 import { SIDEBAR_CONTENT_TOP, SIDEBAR_WIDTH, type Bounds } from "./buildingSidebar";
 
@@ -39,6 +40,27 @@ const CHANCE_FONT = "20px sans-serif";
 const CHANCE_COLOR = "#ff9a3c";
 const CARD_FILL = "#141820";
 const CARD_EDGE = "#4a5568";
+const SCROLL_GUTTER = 16;
+const SCROLL_TRACK = "#2a3040";
+const SCROLL_THUMB = "#8b919c";
+const LIST_GAP = 12;
+
+let scrollY = 0;
+let trackedTile: PlacedTile | null = null;
+let draggingScroll = false;
+let dragOriginY = 0;
+let dragOriginScroll = 0;
+
+/** The list stops above the driver portrait. */
+function listView(): Bounds {
+    const top = SIDEBAR_CONTENT_TOP;
+    const bottom = driverPortraitFrame().y - LIST_GAP;
+    return { x: 0, y: top, width: SIDEBAR_WIDTH, height: Math.max(0, bottom - top) };
+}
+
+function pointIn(bounds: Bounds, x: number, y: number): boolean {
+    return x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.width && y < bounds.y + bounds.height;
+}
 
 export interface OverclockCard {
     index: number;
@@ -83,15 +105,11 @@ function formatChance(chance: number): string {
     return `${Math.round(chance * 1000) / 10}%`;
 }
 
-export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[] {
-    if (!placed?.base.turret) {
-        return [];
-    }
-
+function placeCards(placed: PlacedTile, scroll: number, gutter: number): OverclockCard[] {
     const cards: OverclockCard[] = [];
     const innerLeft = CARD_INSET + CARD_PAD_X;
-    const innerRight = SIDEBAR_WIDTH - CARD_INSET - CARD_PAD_X;
-    let y = SIDEBAR_CONTENT_TOP;
+    const innerRight = SIDEBAR_WIDTH - CARD_INSET - CARD_PAD_X - gutter;
+    let y = SIDEBAR_CONTENT_TOP - scroll;
     for (let index = 0; index < placed.overclocks.length; index++) {
         const slider = placed.overclocks[index].base;
         const cardY = y;
@@ -118,13 +136,117 @@ export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[]
         const card = {
             x: CARD_INSET,
             y: cardY,
-            width: SIDEBAR_WIDTH - CARD_INSET * 2,
+            width: SIDEBAR_WIDTH - CARD_INSET * 2 - gutter,
             height: body + CARD_PAD_Y - cardY,
         };
         y = card.y + card.height + CARD_GAP;
         cards.push({ index, card, track, minus, plus });
     }
     return cards;
+}
+
+function contentHeight(cards: readonly OverclockCard[], scroll: number): number {
+    const last = cards[cards.length - 1];
+    if (!last) {
+        return 0;
+    }
+    return last.card.y + last.card.height - (SIDEBAR_CONTENT_TOP - scroll);
+}
+
+function maxScroll(placed: PlacedTile | null): number {
+    if (!placed?.base.turret) {
+        return 0;
+    }
+    const height = contentHeight(placeCards(placed, 0, 0), 0);
+    return Math.max(0, height - listView().height);
+}
+
+function scrollBar(view: Bounds, limit: number): { track: Bounds; thumb: Bounds } | null {
+    if (limit <= 0) {
+        return null;
+    }
+    const track = {
+        x: SIDEBAR_WIDTH - 12,
+        y: view.y + 4,
+        width: 6,
+        height: Math.max(0, view.height - 8),
+    };
+    const content = limit + view.height;
+    const thumbHeight = Math.max(28, track.height * (view.height / content));
+    const travel = Math.max(0, track.height - thumbHeight);
+    return {
+        track,
+        thumb: {
+            x: track.x,
+            y: track.y + (limit === 0 ? 0 : (scrollY / limit) * travel),
+            width: track.width,
+            height: Math.min(thumbHeight, track.height),
+        },
+    };
+}
+
+/** Wheel and thumb drag. Call before laying the cards out for a click. */
+export function updateOverclockScroll(
+    placed: PlacedTile | null,
+    mouse: { x: number; y: number },
+    wheel: number,
+    leftDown: boolean,
+    leftPressed: boolean,
+): void {
+    if (placed !== trackedTile) {
+        trackedTile = placed;
+        scrollY = 0;
+        draggingScroll = false;
+    }
+    const limit = maxScroll(placed);
+    if (limit <= 0) {
+        scrollY = 0;
+        draggingScroll = false;
+        return;
+    }
+    const view = listView();
+    const bar = scrollBar(view, limit);
+    const overView = pointIn(view, mouse.x, mouse.y);
+    if (overView && wheel !== 0 && !draggingScroll) {
+        scrollY = Math.min(limit, Math.max(0, scrollY + wheel));
+    }
+    if (leftPressed && bar && pointIn(bar.thumb, mouse.x, mouse.y)) {
+        draggingScroll = true;
+        dragOriginY = mouse.y;
+        dragOriginScroll = scrollY;
+    } else if (leftPressed && bar && pointIn(bar.track, mouse.x, mouse.y)) {
+        scrollY = Math.min(limit, Math.max(0, mouse.y < bar.thumb.y ? scrollY - view.height : scrollY + view.height));
+    }
+    if (draggingScroll && leftDown && bar) {
+        const travel = bar.track.height - bar.thumb.height;
+        const dy = mouse.y - dragOriginY;
+        scrollY = travel <= 0 ? 0 : Math.min(limit, Math.max(0, dragOriginScroll + (dy / travel) * limit));
+    }
+    if (!leftDown) {
+        draggingScroll = false;
+    }
+    scrollY = Math.min(limit, Math.max(0, scrollY));
+}
+
+/** True when the pointer is on the scrollbar, so a card button underneath is not clicked. */
+export function overclockScrollbarContains(mouse: { x: number; y: number }, placed: PlacedTile | null): boolean {
+    const bar = scrollBar(listView(), maxScroll(placed));
+    return bar !== null && pointIn(bar.track, mouse.x, mouse.y);
+}
+
+/** A plus or minus that is fully inside the list, not clipped off against the portrait. */
+export function overclockControlVisible(bounds: Bounds): boolean {
+    const view = listView();
+    return bounds.y >= view.y && bounds.y + bounds.height <= view.y + view.height;
+}
+
+export function layoutOverclockCards(placed: PlacedTile | null): OverclockCard[] {
+    if (!placed?.base.turret) {
+        return [];
+    }
+    const limit = maxScroll(placed);
+    scrollY = Math.min(limit, Math.max(0, scrollY));
+    return placeCards(placed, scrollY, limit > 0 ? SCROLL_GUTTER : 0);
 }
 
 export function drawOverclockPanel(placed: PlacedTile | null, modules: number): void {
@@ -142,7 +264,10 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
     }
 
     const turret = placed.base.turret;
+    const view = listView();
     const cards = layoutOverclockCards(placed);
+    const previousClip = getDrawClip();
+    setDrawClip(view);
     for (const card of cards) {
         const instance = placed.overclocks[card.index];
         const adjusted = getOverclockedTurretStats(turret, [instance]);
@@ -290,4 +415,10 @@ export function drawOverclockPanel(placed: PlacedTile | null, modules: number): 
             effectY += chance ? CHANCE_ROW : EFFECT_ROW;
         }
     }
+    const bar = scrollBar(view, maxScroll(placed));
+    if (bar) {
+        drawRect({ ...bar.track, color: SCROLL_TRACK });
+        drawRect({ ...bar.thumb, color: SCROLL_THUMB });
+    }
+    setDrawClip(previousClip);
 }

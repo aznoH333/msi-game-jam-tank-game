@@ -21,7 +21,7 @@ export interface PlayerData {
 export function initPlayerData(): PlayerData {
     return {
         vehicle: vehicleWithoutTutorialParts(vehicleFromSave(starterVehicle)),
-        money: 5_000,
+        money: 5_100,
         overclockModules: 0,
         weapons: {
             "fists": 0, 

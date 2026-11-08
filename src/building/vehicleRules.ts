@@ -1,4 +1,3 @@
-import type { PlayerData } from "../game/playerData";
 import type { PlacedTile } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
 
@@ -11,25 +10,12 @@ const MUST_CONNECT = "All tiles must be connected. Disjointed islands are not al
 const TOO_MANY_WEAPONS = "Not enough weapon slots.";
 const TOO_TALL = "The vehicle can be at most twice as tall as it is wide.";
 
-/** One overclock module from the shop. */
-export const OVERCLOCK_MODULE_PRICE = 2_000;
-
 export function placedWeaponCount(vehicle: BaseVehicle): number {
     return vehicle.tiles.filter((tile) => tile.base.type === "WEAPON").length;
 }
 
 export function canAddWeapon(vehicle: BaseVehicle, slots: number): boolean {
     return placedWeaponCount(vehicle) < slots;
-}
-
-/** Spend money for one overclock module. */
-export function buyOverclockModule(player: PlayerData): boolean {
-    if (player.money < OVERCLOCK_MODULE_PRICE) {
-        return false;
-    }
-    player.money -= OVERCLOCK_MODULE_PRICE;
-    player.overclockModules += 1;
-    return true;
 }
 
 /** Rules that block leaving the shop, in display order. */

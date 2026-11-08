@@ -8,6 +8,7 @@ import { drawSprite } from "../drawing/sprites";
 import { drawText, measureText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
 import { chooseExploration, directorAttempt, getNextEventType, transitionToNextEvent, type EventType } from "../gamedirector/gamedirector";
+import { FIGHTS_BEFORE_BOSS, journeyBossMarks, journeyFraction, journeyVisible } from "../gamedirector/schedule";
 import { getMousePosition, isMouseButtonDown } from "../input/input";
 import { ABILITY_BAR_WIDTH, drawAbilityBar, drawAbilityBarMoney, drawViewEnergy } from "./abilityBar";
 import { lootIcon, lootLabel, lootSprite, rollLootReward, streetLoot, LOOT_FADE_SECONDS, LOOT_POPUP_SECONDS, type LootReward, type StreetLoot } from "./travelLoot";
@@ -130,6 +131,14 @@ export function updateTravel(): void {
         align: "left",
         baseline: "middle",
     });
+    if (journeyVisible(state.gameDirector.tier)) {
+        const drive = stopZ <= 0 ? 1 : Math.min(1, cameraZ / stopZ);
+        const towardCombat = nextEvent === "COMBAT" ? drive : 0;
+        drawJourneyBar(
+            cityView,
+            journeyFraction(state.gameDirector.tier, state.gameDirector.combatsThisTier, towardCombat),
+        );
+    }
 
     const vehicle = presentationVehicle(state.playerData.vehicle);
     drawCombatVehicle(vehicle, playerView, vehicle.base.name, false, vehicle.tiles.map(() => 0), 0, 0, cameraZ);
@@ -200,6 +209,19 @@ export function updateTravel(): void {
         align: "center",
         baseline: "middle",
     });
+    if (nextEvent === "COMBAT" && state.gameDirector.combatsThisTier >= FIGHTS_BEFORE_BOSS) {
+        drawText({
+            text: "BOSS",
+            x: cityView.x + cityView.width / 2,
+            y: cityView.y + 108,
+            font: "bold 36px sans-serif",
+            color: "#ffe14a",
+            align: "center",
+            baseline: "middle",
+            outlineColor: "#000000",
+            outlineWidth: 6,
+        });
+    }
 }
 
 function explorationChoiceBounds(viewX: number, viewWidth: number, viewHeight: number): {
@@ -360,6 +382,49 @@ const SUN_HEIGHT = 72 * SUN_SCALE;
 /** Fraction down the travel view. The road paints over whatever reaches it. */
 const SUN_Y = 0.22;
 
+const MARKER_SCALE = 3;
+const MARKER_START = "world/minimap/start";
+const MARKER_BOSS = "world/minimap/boss";
+const MARKER_END = "world/minimap/end";
+const MARKER_PLAYER = "world/minimap/player";
+
+function drawJourneyBar(view: { x: number; y: number; width: number; height: number }, progress: number): void {
+    const left = view.x + 48;
+    const right = view.x + view.width - 48;
+    const y = view.y + 64;
+    const span = right - left;
+    drawRect({
+        x: left,
+        y: y - 4,
+        width: span,
+        height: 8,
+        color: "#141820",
+    });
+    drawRect({
+        x: left,
+        y: y - 4,
+        width: span * progress,
+        height: 8,
+        color: "#e6c07b",
+    });
+    drawMarker(MARKER_START, left, y);
+    for (const mark of journeyBossMarks()) {
+        drawMarker(MARKER_BOSS, left + span * mark, y);
+    }
+    drawMarker(MARKER_END, right, y);
+    drawMarker(MARKER_PLAYER, left + span * progress, y);
+}
+
+function drawMarker(sprite: string, x: number, y: number): void {
+    drawSprite({
+        sprite,
+        x,
+        y,
+        scaleX: MARKER_SCALE,
+        scaleY: MARKER_SCALE,
+    });
+}
+
 function travelSun(view: { x: number; y: number; width: number; height: number }): SkySprite {
     return {
         sprite: SUN_SPRITE,
@@ -368,6 +433,25 @@ function travelSun(view: { x: number; y: number; width: number; height: number }
         width: SUN_WIDTH,
         height: SUN_HEIGHT,
     };
+}
+
+/** A frozen travel road: buildings, street, and sun, with the camera parked. */
+export function drawStillStreet(view: { x: number; y: number; width: number; height: number }): void {
+    const cameraZ = 0;
+    const camera: Camera3D = {
+        position: { x: 0, y: CAMERA_HEIGHT, z: cameraZ },
+        yaw: 0,
+        pitch: -0.06,
+        fov: Math.PI / 3,
+    };
+    drawScene3D({
+        viewport: view,
+        background: SKY_BOTTOM,
+        sky: { top: SKY_TOP, bottom: SKY_BOTTOM },
+        camera,
+        triangles: streetTriangles(cameraZ),
+        skySprite: travelSun(view),
+    });
 }
 
 function lootBillboards(cameraZ: number, loot: readonly StreetLoot[]): Billboard3D[] {

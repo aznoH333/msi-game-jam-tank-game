@@ -8,16 +8,16 @@ import { isPostTutorialBossShop } from "../gamedirector/schedule";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { buyOffer } from "./itemShop";
-import { drawBuildingSidebar, drawModuleOffer, layoutSidebar, moduleOfferBounds, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
+import { drawBuildingSidebar, layoutSidebar, SIDEBAR_WIDTH, type Bounds, type EditorTab } from "../ui/buildingSidebar";
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
-import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
+import { drawOverclockPanel, layoutOverclockCards, overclockControlVisible, overclockScrollbarContains, updateOverclockScroll } from "../ui/overclockPanel";
 import { tutorialSlots, type TutorialSlot } from "./tutorialSlots";
 import { continueWithTutorialCard, dialogBlocksPlayer, getCurrentDialogCard, notifyOverclockInstalled, notifyTutorialPlacement, queueTrashTutorial, shopActionAllowed, startOverclockTutorial, tutorialPlacementMustAttach } from "../ui/textCard";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { serializeVehicle } from "./vehicleSave";
 import { adjustOverclock, modulesInTile } from "./vehicleUtils";
-import { brokenVehicleRules, buyOverclockModule, canAddWeapon, OVERCLOCK_MODULE_PRICE, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
+import { brokenVehicleRules, canAddWeapon, placedWeaponCount, type VehicleRuleFailure } from "./vehicleRules";
 import { TANK_TRACK_SPRITE, tankTrackColumns } from "./tankTracks";
 import { TILE_SIZE_PX, tileSpriteAt, type BaseTile, type PlacedTile, type TileType } from "./types/tiles";
 import type { BaseVehicle } from "./types/vehicle";
@@ -375,6 +375,9 @@ export function updateVehicleEditor(state: GameState): void {
         editorPrimed = true;
     }
     const leftPressed = leftDown && !editorLeftWasDown;
+    if (selectedTab === "OVERCLOCK") {
+        updateOverclockScroll(selectedOverclockTile, mouse, wheel, leftDown, leftPressed);
+    }
     const goButton = goButtonBounds(paneWidth);
     const copyButton = copyButtonBounds(paneWidth);
     const weaponSlots = state.playerData.vehicleWeaponSlots;
@@ -444,9 +447,9 @@ export function updateVehicleEditor(state: GameState): void {
             }
         } else if (selectedTab === "OVERCLOCK") {
             const cards = layoutOverclockCards(selectedOverclockTile);
-            if (shopActionAllowed("overclock") && leftPressed) {
-                const plus = cards.find((card) => hits(card.plus, mouse.x, mouse.y));
-                const minus = cards.find((card) => hits(card.minus, mouse.x, mouse.y));
+            if (shopActionAllowed("overclock") && leftPressed && !overclockScrollbarContains(mouse, selectedOverclockTile)) {
+                const plus = cards.find((card) => overclockControlVisible(card.plus) && hits(card.plus, mouse.x, mouse.y));
+                const minus = cards.find((card) => overclockControlVisible(card.minus) && hits(card.minus, mouse.x, mouse.y));
                 const stepped = plus ?? minus;
                 const instance = stepped && selectedOverclockTile
                     ? selectedOverclockTile.overclocks[stepped.index]
@@ -477,12 +480,6 @@ export function updateVehicleEditor(state: GameState): void {
                 }
             }
         } else {
-            if (selectedTab === "WEAPON" && shopActionAllowed("module") && leftPressed && !overSidebar && hits(moduleOfferBounds(), mouse.x, mouse.y)) {
-                buyOverclockModule(state.playerData);
-                overSidebar = true;
-            }
-
-            // choose a part to place
             if (!overSidebar) {
                 for (const entry of layout.entries) {
                     if (!hits(entry.bounds, mouse.x, mouse.y)) {
@@ -711,9 +708,6 @@ export function updateVehicleEditor(state: GameState): void {
 
     setDrawClip(null);
     drawBuildingSidebar(layout, selectedTile, state.playerData.money, state.playerData.unlockedTiles);
-    if (selectedTab === "WEAPON") {
-        drawModuleOffer(OVERCLOCK_MODULE_PRICE, state.playerData.money >= OVERCLOCK_MODULE_PRICE);
-    }
     if (selectedTab === "ITEMS") {
         drawItemShop(state.playerData);
     }

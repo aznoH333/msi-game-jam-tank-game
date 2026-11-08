@@ -10,6 +10,8 @@ interface QueuedText {
     baseline: CanvasTextBaseline;
     zIndex: number;
     clip: DrawClip | null;
+    outlineColor: string | null;
+    outlineWidth: number;
 }
 
 const queuedText: QueuedText[] = [];
@@ -23,6 +25,9 @@ export interface DrawTextCommand {
     align?: CanvasTextAlign;
     baseline?: CanvasTextBaseline;
     zIndex?: number;
+    /** Stroke drawn behind the fill. */
+    outlineColor?: string;
+    outlineWidth?: number;
 }
 
 export function drawText({
@@ -34,8 +39,22 @@ export function drawText({
     align = "left",
     baseline = "middle",
     zIndex = 0,
+    outlineColor,
+    outlineWidth = 0,
 }: DrawTextCommand): void {
-    queuedText.push({ text, x, y, font, color, align, baseline, zIndex, clip: getDrawClip() });
+    queuedText.push({
+        text,
+        x,
+        y,
+        font,
+        color,
+        align,
+        baseline,
+        zIndex,
+        clip: getDrawClip(),
+        outlineColor: outlineColor ?? null,
+        outlineWidth,
+    });
 }
 
 export function measureText(text: string, font = "16px sans-serif"): number {
@@ -58,9 +77,15 @@ export function renderText(): void {
             context.clip();
         }
         context.font = draw.font;
-        context.fillStyle = draw.color;
         context.textAlign = draw.align;
         context.textBaseline = draw.baseline;
+        if (draw.outlineColor && draw.outlineWidth > 0) {
+            context.strokeStyle = draw.outlineColor;
+            context.lineWidth = draw.outlineWidth;
+            context.lineJoin = "round";
+            context.strokeText(draw.text, draw.x, draw.y);
+        }
+        context.fillStyle = draw.color;
         context.fillText(draw.text, draw.x, draw.y);
         context.restore();
     }

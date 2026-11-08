@@ -953,6 +953,9 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
     if (!fightOver && !hasLivingWeapon(battle.enemy.instance)) {
         battle.result = "victory";
         destroyDefeatedTank(battle, battle.enemy, view.enemyCamera);
+    } else if (!fightOver && !hasLivingWeapon(battle.player.instance)) {
+        battle.result = "defeat";
+        destroyDefeatedTank(battle, battle.player, view.playerCamera);
     }
 
     const stillBursting: Explosion[] = [];

@@ -1,6 +1,7 @@
 import { ABILITY_BAR_WIDTH } from "./constants";
 import type { TileInstance } from "./types/tileInstance";
 import { TILE_SIZE_PX, tileSpriteAt } from "../building/types/tiles";
+import { getOverclockedTurretStats } from "../building/vehicleUtils";
 import { drawRect, GAME_HEIGHT, strokeRect } from "../drawing/canvas";
 import { drawSprite } from "../drawing/sprites";
 import { drawText } from "../drawing/text";
@@ -98,6 +99,20 @@ export function drawAbilityBar(
             height: button.height,
             color: selected ? "#343c50" : "#262c3a",
         });
+        const cooldown = cooldowns[button.index] ?? 0;
+        const reloadTime = gun.tile.base.turret
+            ? getOverclockedTurretStats(gun.tile.base.turret, gun.tile.overclocks).reloadTime
+            : 0;
+        if (cooldown > 0 && reloadTime > 0) {
+            const ready = Math.max(0, Math.min(1, 1 - cooldown / reloadTime));
+            drawRect({
+                x: button.x,
+                y: button.y,
+                width: button.width * ready,
+                height: button.height,
+                color: "rgba(196, 164, 82, 0.38)",
+            });
+        }
         if (selected) {
             strokeRect({
                 x: button.x + 1,
@@ -143,7 +158,6 @@ export function drawAbilityBar(
             align: "left",
             baseline: "middle",
         });
-        const cooldown = cooldowns[button.index] ?? 0;
         if (cooldown > 0) {
             drawText({
                 text: cooldown.toFixed(1),
@@ -254,6 +268,13 @@ export function drawViewEnergy(
 }
 
 /** Money at the bottom of the left sidebar, with modules and weapon slots stacked above it. */
+export function driverPortraitFrame(): { x: number; y: number; width: number; height: number } {
+    const width = ABILITY_BAR_WIDTH - 32;
+    const moneyY = GAME_HEIGHT - 72;
+    const weaponY = moneyY - 64;
+    return { x: 16, y: weaponY - 12 - width, width, height: width };
+}
+
 export function drawAbilityBarMoney(
     money: number,
     modules: number,
@@ -261,13 +282,13 @@ export function drawAbilityBarMoney(
     weaponSlots: number,
     driver?: DriverPortraitState,
 ): void {
-    const width = ABILITY_BAR_WIDTH - 32;
+    const portrait = driverPortraitFrame();
     const moneyY = GAME_HEIGHT - 72;
     const weaponY = moneyY - 64;
-    drawDriverPortrait(16, weaponY - 12 - width, width, driver ?? { healthRatio: 1, shakeX: 0, shakeY: 0 });
-    drawWeaponSlotReadout(16, weaponY, width, weaponsPlaced, weaponSlots);
-    drawModuleReadout(16, moneyY - 32, width, modules);
-    drawMoneyReadout(16, moneyY, width, money);
+    drawDriverPortrait(portrait.x, portrait.y, portrait.width, driver ?? { healthRatio: 1, shakeX: 0, shakeY: 0 });
+    drawWeaponSlotReadout(16, weaponY, portrait.width, weaponsPlaced, weaponSlots);
+    drawModuleReadout(16, moneyY - 32, portrait.width, modules);
+    drawMoneyReadout(16, moneyY, portrait.width, money);
 }
 
 /** Stored energy, its cap, and how fast living generators refill it. */

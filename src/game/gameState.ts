@@ -5,13 +5,15 @@ import { buildingScreenUpdate } from "./buildingScreen";
 import { combatScreenUpdate } from "./combatScreen";
 import { explorationScreenUpdate } from "./explorationScreen";
 import { gameOverUpdate } from "./gameOver";
+import { logoScreenUpdate } from "./logoScreen";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
 import { isScreenTransitionIdle, requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
+import { storyScreenUpdate } from "./storyScreen";
 import { activeDialogId, playQueuedTrashTutorial, resetTutorialProgress, startDialogChain, stopDialog, updateDialog } from "../ui/textCard";
 
 
-export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
+export type GameScreen = "LOGO_SCREEN" | "MAIN_MENU" | "INTRO_SCREEN" | "OUTRO_SCREEN" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
 
 export interface GameState {
     currentScreen: GameScreen;
@@ -25,7 +27,7 @@ export interface GameState {
 export function initGame(): GameState {
     // initializes new game
     return {
-        currentScreen: "MAIN_MENU",
+        currentScreen: "LOGO_SCREEN",
         playerData: initPlayerData(),
         gameDirector: initGameDirector(),
     };
@@ -59,8 +61,17 @@ export function updateGame(state: GameState) {
     setMusic(musicFor(state));
     switch (state.currentScreen) {
         
+        case "LOGO_SCREEN":
+            logoScreenUpdate();
+            break;
+
         case "MAIN_MENU":
             mainMenuUpdate();
+            break;
+
+        case "INTRO_SCREEN":
+        case "OUTRO_SCREEN":
+            storyScreenUpdate();
             break;
 
         case "BUILDING_SCREEN":
@@ -84,7 +95,12 @@ export function updateGame(state: GameState) {
 }
 
 function musicFor(state: GameState): string | null {
-    if (state.currentScreen === "BUILDING_SCREEN") {
+    if (
+        state.currentScreen === "MAIN_MENU"
+        || state.currentScreen === "INTRO_SCREEN"
+        || state.currentScreen === "OUTRO_SCREEN"
+        || state.currentScreen === "BUILDING_SCREEN"
+    ) {
         return "music/building_music";
     }
     if (state.currentScreen === "COMBAT_SCREEN" && state.gameDirector.currentEventType === "TRAVEL") {

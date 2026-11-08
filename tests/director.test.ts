@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { markShopCheckpoint, rewindToCheckpoint } from "../src/gamedirector/checkpoint";
 import type { GameDirector } from "../src/gamedirector/gamedirector";
 import { chooseEnemyRecord } from "../src/gamedirector/enemyPick";
-import { combatIsBoss, isPostTutorialBossShop, nextEvent, noteShopEntered, recordCombatVictory } from "../src/gamedirector/schedule";
+import { combatIsBoss, isPostTutorialBossShop, journeyBossMarks, journeyFraction, journeyVisible, nextEvent, noteShopEntered, recordCombatVictory } from "../src/gamedirector/schedule";
 import { PERSON_HEALTH_MAX, initPlayerData } from "../src/game/playerData";
 
 function director(eventIndex: number, currentEventType: GameDirector["currentEventType"], lastCheckPoint = 0): GameDirector {
@@ -16,6 +16,7 @@ function director(eventIndex: number, currentEventType: GameDirector["currentEve
         fightsSinceShop: 0,
         shopEvery: 2,
         bossShopPending: false,
+        finalBossShopDone: false,
         lastEnemyFile: null,
     };
 }
@@ -67,12 +68,12 @@ describe("tier schedule", () => {
         assert.equal(nextEvent(run), "SHOP");
 
         run.currentEventType = "SHOP";
-        noteShopEntered(run, 3);
+        noteShopEntered(run, 1);
         assert.equal(run.fightsSinceShop, 0);
-        assert.equal(run.shopEvery, 3);
+        assert.equal(run.shopEvery, 1);
 
-        run.combatsThisTier = 5;
-        run.fightsSinceShop = 3;
+        run.combatsThisTier = 3;
+        run.fightsSinceShop = 1;
         run.currentEventType = "TRAVEL";
         assert.equal(nextEvent(run), "COMBAT");
         assert.equal(combatIsBoss(run, true), true);
@@ -83,6 +84,32 @@ describe("tier schedule", () => {
         assert.equal(run.bossShopPending, true);
         run.currentEventType = "TRAVEL";
         assert.equal(nextEvent(run), "SHOP");
+    });
+
+    it("shops after the first fight when the gap is one", () => {
+        const run = director(0, "TRAVEL");
+        run.shopEvery = 1;
+        assert.equal(nextEvent(run), "COMBAT");
+        assert.equal(combatIsBoss(run, true), false);
+        recordCombatVictory(run, false);
+        run.currentEventType = "TRAVEL";
+        assert.equal(nextEvent(run), "SHOP");
+    });
+
+    it("shops once more before the final boss, then sends the player to that fight", () => {
+        const run = director(20, "TRAVEL");
+        run.tier = 4;
+        run.combatsThisTier = 3;
+        run.fightsSinceShop = 0;
+        assert.equal(nextEvent(run), "SHOP");
+        assert.equal(combatIsBoss(run, true), true);
+
+        run.currentEventType = "SHOP";
+        noteShopEntered(run, 2);
+        assert.equal(run.finalBossShopDone, true);
+        run.currentEventType = "TRAVEL";
+        assert.equal(nextEvent(run), "COMBAT");
+        assert.equal(combatIsBoss(run, true), true);
     });
 
     it("opens a tier that has no regular tanks with its boss", () => {
@@ -105,6 +132,19 @@ describe("tier schedule", () => {
         shop.combatsThisTier = 0;
         shop.tier = 0;
         assert.equal(isPostTutorialBossShop(shop), false);
+    });
+});
+
+describe("travel journey bar", () => {
+    it("stays hidden through the tutorial boss, then tracks the four tiers", () => {
+        assert.equal(journeyVisible(0), false);
+        assert.equal(journeyVisible(1), true);
+        assert.deepEqual(journeyBossMarks(), [0.25, 0.5, 0.75]);
+        assert.equal(journeyFraction(1, 0, 0), 0);
+        assert.equal(journeyFraction(1, 3, 1), 0.25);
+        assert.equal(journeyFraction(2, 0, 0), 0.25);
+        assert.equal(journeyFraction(4, 3, 1), 1);
+        assert.equal(journeyFraction(5, 0, 0), 1);
     });
 });
 

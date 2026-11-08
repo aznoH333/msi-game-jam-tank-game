@@ -93,25 +93,25 @@ export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
         fileName: "t3_small.json",
         vehicleTier: 3,
         isBoss: false,
-        moneyDropped: 4000,
+        moneyDropped: 5000,
     },
     { 
         fileName: "t3_small_2.json",
         vehicleTier: 3,
         isBoss: false,
-        moneyDropped: 4000,
+        moneyDropped: 5000,
     },
     { 
         fileName: "t3_mortar.json",
         vehicleTier: 3,
         isBoss: false,
-        moneyDropped: 5000,
+        moneyDropped: 6000,
     },
     {  // t3 boss
         fileName: "t3_large.json",
         vehicleTier: 3,
         isBoss: true,
-        moneyDropped: 10000,
+        moneyDropped: 20000,
     },
 
 
@@ -119,19 +119,19 @@ export const ENEMY_CATALOG: EnemyCatalogRecord[] = [
         fileName: "t4_medium.json",
         vehicleTier: 4,
         isBoss: false,
-        moneyDropped: 5000,
+        moneyDropped: 7000,
     },
     { // t4
         fileName: "t4_missile.json",
         vehicleTier: 4,
         isBoss: false,
-        moneyDropped: 5000,
+        moneyDropped: 7000,
     },
     { // cannon brick
         fileName: "t4_cannon_brick.json",
         vehicleTier: 4,
         isBoss: false,
-        moneyDropped: 5000,
+        moneyDropped: 7000,
     },
     
     // final boss

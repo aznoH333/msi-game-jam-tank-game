@@ -317,7 +317,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
             width: 1,
             height: 1,
             powerCapacity: 25,
-            price: 500,
+            price: 600,
             health: 40,
             explosionRadius: 1.5,
             explosionDamage: 5,

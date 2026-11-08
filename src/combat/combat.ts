@@ -7,6 +7,7 @@ import { drawText } from "../drawing/text";
 import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
+import { openOutro } from "../game/storyScreen";
 import { unlockVehicleTiles } from "../game/playerData";
 import { pickEnemyVehicle, tierHasRegulars } from "../gamedirector/constants/enemyCatalog";
 import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
@@ -562,7 +563,11 @@ export function updateCombat(): void {
         && mouse.x < button.x + button.width
         && mouse.y < button.y + button.height
     ) {
-        transitionToNextEvent();
+        if (encounterBoss && state.gameDirector.tier === 5) {
+            openOutro();
+        } else {
+            transitionToNextEvent();
+        }
     }
 }
 

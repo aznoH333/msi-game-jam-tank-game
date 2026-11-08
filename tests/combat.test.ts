@@ -86,7 +86,7 @@ function crewGun(): PlacedTile {
 describe("combat loop", () => {
     it("leaves both tanks intact when nobody fires", () => {
         const outcome = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         ).run(5);
 
@@ -124,13 +124,21 @@ describe("combat loop", () => {
         assert.equal(disarmed.player.healthRatio, 1);
 
         const hurt = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 90, 10), battery(2, 0)]),
         );
         const playerTile = hurt.tile("player", 0);
         const outcome = hurt.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: playerTile } }).run(1 + OPENING_FIRE_DELAY);
         assert.equal(outcome.winner, null);
         assert.equal(outcome.player.tiles[0].health, 10);
+
+        const dead = combatMatch(
+            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Enemy", [gun(0, 0, 90, 10), battery(2, 0)]),
+        ).run(0.05);
+        assert.equal(dead.winner, "enemy");
+        assert.equal(dead.player.healthRatio, 0);
+        assert.equal(dead.player.tiles[0].health, 0);
     });
 
     it("pays the enemy bounty when the player wins, and nothing otherwise", () => {
@@ -149,7 +157,7 @@ describe("combat loop", () => {
         assert.ok(won.sounds.includes("weapons/explosion"));
 
         const loss = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 90, 10), battery(2, 0)]),
             bounty,
         );
@@ -193,7 +201,7 @@ describe("combat loop", () => {
 
     it("lets the enemy's scripted shot damage the player", () => {
         const match = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 25, 10), battery(2, 0)]),
         );
         const aim = match.tile("player", 0);
@@ -206,7 +214,7 @@ describe("combat loop", () => {
 
     it("repairs the user's own living tiles over time", () => {
         const match = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 40, 10), battery(2, 0)]),
         );
         const wounded = match.tile("player", 0);
@@ -226,7 +234,7 @@ describe("combat loop", () => {
 
     it("restores a destroyed tile on the first repair tick, then keeps healing it", () => {
         const match = combatMatch(
-            vehicle("Player", [block(0, 0, 100), block(8, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), block(8, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 100, 10), battery(2, 0)]),
         );
         const destroyed = match.tile("player", 0);
@@ -365,7 +373,7 @@ describe("combat loop", () => {
 
     it("flashes a repaired tile green, and leaves an untouched tile alone", () => {
         const match = combatMatch(
-            vehicle("Player", [block(0, 0, 100), block(8, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), block(8, 0, 100), crewGun()]),
             vehicle("Enemy", [gun(0, 0, 40, 10), battery(2, 0)]),
         );
         const wounded = match.tile("player", 0);
@@ -408,7 +416,7 @@ describe("combat loop", () => {
 
     it("plays repair when a circle starts, and weapon ready when a gun can fire again", () => {
         const repaired = combatMatch(
-            vehicle("Player", [block(0, 0, 100)]),
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
             vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const circle = repaired.at(0, "player", { repair: { at: repaired.tile("player", 0) } }).run(0.05);
