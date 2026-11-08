@@ -102,15 +102,25 @@ describe("combat loop", () => {
             vehicle("Enemy", [block(0, 0, 100), crewGun()]),
         );
         const aim = match.tile("enemy", 0);
-        const held = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(OPENING_FIRE_DELAY);
-        assert.equal(held.enemy.tiles[0].health, 100);
-
-        const outcome = match.at(OPENING_FIRE_DELAY, "player", { fire: { gun: 0, at: aim } }).run(1);
+        const outcome = match.at(0, "player", { fire: { gun: 0, at: aim } }).run(1);
 
         assert.equal(outcome.winner, null);
         assert.equal(outcome.enemy.tiles[0].health, 70);
         assert.equal(outcome.player.tiles[0].health, 200);
         assert.ok(outcome.player.energy < 105);
+    });
+
+    it("holds the enemy's first shot until the opening delay ends", () => {
+        const match = combatMatch(
+            vehicle("Player", [block(0, 0, 100), crewGun()]),
+            vehicle("Enemy", [gun(0, 0, 30, 10), battery(2, 0)]),
+        );
+        const aim = match.tile("player", 0);
+        const held = match.at(0, "enemy", { fire: { gun: 0, at: aim } }).run(OPENING_FIRE_DELAY);
+        assert.equal(held.player.tiles[0].health, 100);
+
+        const landed = match.at(OPENING_FIRE_DELAY, "enemy", { fire: { gun: 0, at: aim } }).run(1);
+        assert.equal(landed.player.tiles[0].health, 70);
     });
 
     it("destroys an enemy tank that has no living weapon, and leaves a hurt player in the fight", () => {

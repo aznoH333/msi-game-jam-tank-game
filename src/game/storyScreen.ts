@@ -26,7 +26,7 @@ let lastMs = 0;
 let leftWasDown = false;
 let armed = false;
 
-/** Story page after New Game. Continue opens the first shop. */
+/** Story page after Play, when no run is stored. Continue opens the first shop. */
 export function openIntro(): void {
     beginStory("intro");
     switchGameState("INTRO_SCREEN");

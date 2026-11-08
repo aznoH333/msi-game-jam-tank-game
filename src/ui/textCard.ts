@@ -1,4 +1,5 @@
 import { playSound } from "../audio/audio";
+import type { SavedTutorials } from "../game/save";
 import { ABILITY_BAR_WIDTH } from "../combat/constants";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, setDrawClip, strokeRect } from "../drawing/canvas";
 import { drawText, measureText } from "../drawing/text";
@@ -88,10 +89,30 @@ export function stopDialog(): void {
 
 /** A new run should see the tutorials again. */
 export function resetTutorialProgress(): void {
-    firstCombatTutorialDone = false;
-    overclockTutorialDone = false;
-    trashTutorialDone = false;
-    trashTutorialQueued = false;
+    restoreTutorialProgress({
+        firstCombatTutorialDone: false,
+        overclockTutorialDone: false,
+        trashTutorialDone: false,
+        trashTutorialQueued: false,
+    });
+}
+
+/** Tutorial flags stored with the run. */
+export function tutorialProgress(): SavedTutorials {
+    return {
+        firstCombatTutorialDone,
+        overclockTutorialDone,
+        trashTutorialDone,
+        trashTutorialQueued,
+    };
+}
+
+/** Put a saved run's tutorial flags back. */
+export function restoreTutorialProgress(progress: SavedTutorials): void {
+    firstCombatTutorialDone = progress.firstCombatTutorialDone;
+    overclockTutorialDone = progress.overclockTutorialDone;
+    trashTutorialDone = progress.trashTutorialDone;
+    trashTutorialQueued = progress.trashTutorialQueued;
 }
 
 /**

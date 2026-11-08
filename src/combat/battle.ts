@@ -794,7 +794,7 @@ function detonate(
     }
 }
 
-/** Drop the aim point while the opening delay is running, so a click cannot start a shot. */
+/** Drop the enemy's aim point while the opening delay is running. */
 function holdFire(input: CombatInput | null, locked: boolean): CombatInput | null {
     if (!input || !locked) {
         return input;
@@ -898,7 +898,7 @@ export function stepBattle(battle: Battle, dt: number, orders: BattleOrders): vo
             battle.enemyActionDelay = Math.max(0, battle.enemyActionDelay - dt);
         }
     }
-    const playerInput = fightOver ? null : holdFire(ordersToInput(orders.player), firingLocked);
+    const playerInput = fightOver ? null : ordersToInput(orders.player);
     updateCombatant(battle, battle.player, dt, playerInput, view.playerCamera);
     const enemyInput = fightOver
         ? null

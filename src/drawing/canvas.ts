@@ -58,6 +58,18 @@ export function initCanvas(): void {
     window.addEventListener("resize", fitCanvasToView);
 }
 
+/** Map a point in the 1920×1080 game frame into a browser pixel. */
+export function gameToClient(x: number, y: number): { x: number; y: number } {
+    if (!canvasElement) {
+        return { x, y };
+    }
+    const rect = canvasElement.getBoundingClientRect();
+    return {
+        x: rect.left + (x / GAME_WIDTH) * rect.width,
+        y: rect.top + (y / GAME_HEIGHT) * rect.height,
+    };
+}
+
 /** Map a browser pixel into the fixed 1920×1080 game frame. */
 export function clientToGame(clientX: number, clientY: number): { x: number; y: number } {
     if (!canvasElement) {

@@ -6,11 +6,12 @@ import { combatScreenUpdate } from "./combatScreen";
 import { explorationScreenUpdate } from "./explorationScreen";
 import { gameOverUpdate } from "./gameOver";
 import { logoScreenUpdate } from "./logoScreen";
-import { mainMenuUpdate } from "./mainMenu";
+import { hideRepoLink, mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
+import { clearSavedRun, isSavedScreen, loadSavedRun, writeSavedRun } from "./save";
 import { isScreenTransitionIdle, requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
 import { storyScreenUpdate } from "./storyScreen";
-import { activeDialogId, playQueuedTrashTutorial, resetTutorialProgress, startDialogChain, stopDialog, updateDialog } from "../ui/textCard";
+import { activeDialogId, playQueuedTrashTutorial, resetTutorialProgress, restoreTutorialProgress, startDialogChain, stopDialog, tutorialProgress, updateDialog } from "../ui/textCard";
 
 
 export type GameScreen = "LOGO_SCREEN" | "MAIN_MENU" | "INTRO_SCREEN" | "OUTRO_SCREEN" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
@@ -90,7 +91,13 @@ export function updateGame(state: GameState) {
             gameOverUpdate();
             break;
     }
+    if (state.currentScreen !== "MAIN_MENU") {
+        hideRepoLink();
+    }
     updateDialog();
+    if (isSavedScreen(state.currentScreen)) {
+        writeSavedRun(state.playerData, state.gameDirector, state.currentScreen, tutorialProgress());
+    }
     setScreenFade(screenFadeAlpha());
 }
 
@@ -123,6 +130,34 @@ export function startNewGame(): void {
         resetTutorialProgress();
         startDialogChain("shop_dialog_1");
     });
+}
+
+/** Open the stored run on the screen it was left on. */
+export function resumeSavedRun(): boolean {
+    const saved = loadSavedRun();
+    if (!saved) {
+        return false;
+    }
+    requestTransition(() => {
+        beginAttempt();
+        const state = getGameState();
+        state.playerData = saved.player;
+        state.gameDirector = saved.director;
+        state.currentScreen = saved.screen;
+        restoreTutorialProgress(saved.tutorials);
+        stopDialog();
+    });
+    return true;
+}
+
+/** Drop the stored run so the next Play starts from the intro. */
+export function discardRun(): void {
+    clearSavedRun();
+    const state = getGameState();
+    state.playerData = initPlayerData();
+    state.gameDirector = initGameDirector();
+    resetTutorialProgress();
+    stopDialog();
 }
 
 export function switchGameState(newState: GameScreen) {
