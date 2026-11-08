@@ -447,8 +447,14 @@ export function updateVehicleEditor(state: GameState): void {
                 if (stepped && instance) {
                     const adjusted = adjustOverclock(instance, plus ? 1 : -1, state.playerData.overclockModules);
                     if (adjusted) {
+                        const installed = adjusted.modules < state.playerData.overclockModules;
                         instance.value = adjusted.value;
                         state.playerData.overclockModules = adjusted.modules;
+                        if (installed) {
+                            playSound("building/overclock_install");
+                        } else {
+                            playSound("building/overclock_uninstall");
+                        }
                     }
                 } else if (!overSidebar && hover) {
                     const turret = state.playerData.vehicle.tiles.find((placed) => {

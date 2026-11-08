@@ -122,6 +122,7 @@ function overclock(value: number): WeaponOverclockInstance {
             minValue: -0.5,
             maxValue: 1,
             stepSize: 0.25,
+            stepCost: 1,
             damage: 1,
         },
     };
@@ -165,6 +166,7 @@ describe("overclock modules", () => {
                 minValue: 0,
                 maxValue: 1,
                 stepSize: 0.25,
+                stepCost: 1,
                 jamChance: 0.2,
                 failChance: 0.1,
             },
@@ -180,6 +182,21 @@ describe("overclock modules", () => {
         assert.equal(modulesInTile(gun), 2);
         gun.overclocks = [overclock(0)];
         assert.equal(modulesInTile(gun), 0);
+    });
+
+    it("spends and refunds the slider step cost", () => {
+        const slider = overclock(0);
+        slider.base.stepCost = 3;
+        const raised = adjustOverclock(slider, 1, 3);
+        assert.deepEqual(raised, { value: 0.25, modules: 0 });
+        assert.equal(adjustOverclock(slider, 1, 2), null);
+
+        const lowered = adjustOverclock({ ...slider, value: 0.25 }, -1, 0);
+        assert.deepEqual(lowered, { value: 0, modules: 3 });
+
+        const gun = part(0, 0, 1, 1, true);
+        gun.overclocks = [{ ...slider, value: 0.5 }];
+        assert.equal(modulesInTile(gun), 6);
     });
 });
 

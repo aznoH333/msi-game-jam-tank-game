@@ -91,13 +91,14 @@ export function getPowerPerSecond(vehicle: BaseVehicle): number {
     return output;
 }
 
-/** Modules installed on this slider. Only steps above the stock value cost a module. */
+/** Modules installed on this slider. Each step above stock costs `stepCost` modules. */
 export function overclockModulesUsed(instance: WeaponOverclockInstance): number {
     const step = instance.base.stepSize;
     if (step === 0) {
         return 0;
     }
-    return Math.max(0, Math.round((instance.value - instance.base.baseValue) / step));
+    const steps = Math.max(0, Math.round((instance.value - instance.base.baseValue) / step));
+    return steps * Math.max(0, instance.base.stepCost);
 }
 
 /** Modules to give back when this part is sold. */
@@ -106,7 +107,7 @@ export function modulesInTile(tile: PlacedTile): number {
 }
 
 /**
- * Move one step. A step that adds a module costs one. A step that removes a module refunds it.
+ * Move one step. A step that adds modules costs `stepCost`. A step that removes them refunds that many.
  * Tuning at or below the stock value does not pay modules out.
  */
 export function adjustOverclock(

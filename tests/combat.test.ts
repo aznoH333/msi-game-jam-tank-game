@@ -460,6 +460,7 @@ function chanceOverclock(kind: "jamChance" | "failChance"): PlacedTile["overcloc
             minValue: 0,
             maxValue: 1,
             stepSize: 1,
+            stepCost: 1,
             [kind]: 1,
         },
         value: 1,

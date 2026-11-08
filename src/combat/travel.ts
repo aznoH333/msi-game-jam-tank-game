@@ -1,4 +1,4 @@
-import { setEngineBlend } from "../audio/audio";
+import { playSound, setEngineBlend } from "../audio/audio";
 import { placedWeaponCount } from "../building/vehicleRules";
 import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
@@ -389,6 +389,7 @@ function openLoot(
         return;
     }
     openedLoot.set(best.index, travelTime);
+    playSound("misc/loot_opened");
     const player = getGameState().playerData;
     if (best.reward.kind === "money") {
         player.money += best.reward.amount;

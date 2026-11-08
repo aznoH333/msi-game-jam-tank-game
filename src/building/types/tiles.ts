@@ -80,7 +80,8 @@ export interface WeaponOverclockSlider {
     minValue: number;
     maxValue: number;
     stepSize: number;
-
+    /** How many modules are needed to add 1 step to this slider */
+    stepCost: number;
 
 
     /** multiplier values. Scales with points allocated */

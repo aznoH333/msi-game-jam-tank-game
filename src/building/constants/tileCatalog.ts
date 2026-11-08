@@ -40,16 +40,18 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         reloadTime: 0.15,
                         accuracy: 0.15,
                         jamChance: 0.01,
+                        stepCost: 1,
                     },
                     {
                         name: "Speed loader",
                         baseValue: 0,
                         minValue: 0,
-                        maxValue: 1,
-                        stepSize: 0.2,
-                        reloadTime: -0.5,
+                        maxValue: 2,
+                        stepSize: 1,
+                        reloadTime: -0.25,
                         powerCost: 0.2,
                         jamChance: 0.03,
+                        stepCost: 1,
                     },
                     {
                         name: "Oversized shells",
@@ -61,6 +63,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         explosionRadius: 1,
                         salvoDelay: 0.2,
                         failChance: 0.05,
+                        stepCost: 2,
                     }
                 ]
             }
@@ -102,17 +105,31 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         accuracy: -0.35,
                         powerCost: 0.15,
                         jamChance: 0.01,
+                        stepCost: 1,
                     },
                     {
                         name: "Speed loader",
                         baseValue: 0,
                         minValue: 0,
-                        maxValue: 1,
-                        stepSize: 0.2,
+                        maxValue: 2,
+                        stepSize: 1,
                         reloadTime: -0.5,
                         powerCost: 0.2,
                         jamChance: 0.05,
+                        stepCost: 2,
                     },
+                    {
+                        name: "Heavy rounds",
+                        baseValue: 0,
+                        minValue: 0,
+                        maxValue: 1,
+                        stepSize: 1,
+                        reloadTime: 0.3,
+                        powerCost: 0.1,
+                        failChance: 0.1,
+                        damage: 1,
+                        stepCost: 3
+                    }
                 ]
             }
         },
@@ -152,6 +169,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         stepSize: 0.5,
                         explosionRadius: 2,
                         failChance: 0.1,
+                        stepCost: 1
                     },
                     {
                         name: "Bombardment",
@@ -162,6 +180,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         salvo: 1,
                         accuracy: 0.3,
                         failChance: 0.05,
+                        stepCost: 1,
                     },
                 ]
             }
@@ -201,8 +220,9 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         maxValue: 2,
                         stepSize: 1,
                         salvo: 2,
-                        accuracy: 0.35,
+                        accuracy: 0.1,
                         failChance: 0.1,
+                        stepCost: 3,
                     },
                     {
                         name: "Mini nuke shells",
@@ -213,6 +233,7 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         damage: -0.6,
                         explosionRadius: 1,
                         failChance: 0.3,
+                        stepCost: 5,
                     }
                 ]
             }
@@ -249,14 +270,15 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         name: "Micro missiles",
                         baseValue: 0,
                         minValue: 0,
-                        maxValue: 3,
+                        maxValue: 1,
                         stepSize: 1,
-                        salvo: 3,
-                        explosionRadius: -0.15,
-                        damage: -0.15,
-                        salvoDelay: -0.25,
-                        powerCost: -0.25,
+                        salvo: 6,
+                        explosionRadius: -0.30,
+                        damage: -0.30,
+                        salvoDelay: -0.8,
+                        powerCost: -0.30,
                         jamChance: 0.005,
+                        stepCost: 5,
                     },
                     {
                         name: "Concentrated explosives",
@@ -266,7 +288,19 @@ export const TILE_CATALOG: Record<TileType, BaseTile[]> = {
                         stepSize: 0.2,
                         damage: 0.5,
                         explosionRadius: -0.75,
-                        jamChance: 0.04
+                        jamChance: 0.04,
+                        stepCost: 1
+                    },
+                    {
+                        name: "Target locking",
+                        baseValue: 0,
+                        minValue: 0,
+                        maxValue: 1,
+                        stepSize: 0.5,
+                        accuracy: -0.75,
+                        powerCost: 0.5,
+                        stepCost: 3,
+                        
                     }
                     
                 ]
