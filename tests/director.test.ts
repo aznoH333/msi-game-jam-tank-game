@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { markShopCheckpoint, rewindToCheckpoint } from "../src/gamedirector/checkpoint";
 import type { GameDirector } from "../src/gamedirector/gamedirector";
-import { combatIsBoss, nextEvent, noteShopEntered, recordCombatVictory } from "../src/gamedirector/schedule";
+import { chooseEnemyRecord } from "../src/gamedirector/enemyPick";
+import { combatIsBoss, isPostTutorialBossShop, nextEvent, noteShopEntered, recordCombatVictory } from "../src/gamedirector/schedule";
 import { PERSON_HEALTH_MAX, initPlayerData } from "../src/game/playerData";
 
 function director(eventIndex: number, currentEventType: GameDirector["currentEventType"], lastCheckPoint = 0): GameDirector {
@@ -15,6 +16,7 @@ function director(eventIndex: number, currentEventType: GameDirector["currentEve
         fightsSinceShop: 0,
         shopEvery: 2,
         bossShopPending: false,
+        lastEnemyFile: null,
     };
 }
 
@@ -88,5 +90,47 @@ describe("tier schedule", () => {
         intro.tier = 0;
         assert.equal(nextEvent(intro), "COMBAT");
         assert.equal(combatIsBoss(intro, false), true);
+    });
+
+    it("treats the shop after the intro boss as the post-tutorial shop", () => {
+        const shop = director(4, "SHOP");
+        shop.tier = 1;
+        shop.combatsThisTier = 0;
+        assert.equal(isPostTutorialBossShop(shop), true);
+        shop.currentEventType = "TRAVEL";
+        assert.equal(isPostTutorialBossShop(shop), false);
+        shop.currentEventType = "SHOP";
+        shop.combatsThisTier = 1;
+        assert.equal(isPostTutorialBossShop(shop), false);
+        shop.combatsThisTier = 0;
+        shop.tier = 0;
+        assert.equal(isPostTutorialBossShop(shop), false);
+    });
+});
+
+describe("regular enemy picks", () => {
+    const pool = [
+        { fileName: "t1_small_2.json" },
+        { fileName: "t1_cannon.json" },
+        { fileName: "t1_medium.json" },
+    ];
+
+    it("skips the tank from the last fight when the pool has another", () => {
+        for (let roll = 0; roll < 1; roll += 0.01) {
+            const picked = chooseEnemyRecord(pool, "t1_cannon.json", roll);
+            assert.notEqual(picked.fileName, "t1_cannon.json");
+        }
+        assert.equal(chooseEnemyRecord(pool, "t1_cannon.json", 0).fileName, "t1_small_2.json");
+        assert.equal(chooseEnemyRecord(pool, "t1_cannon.json", 0.99).fileName, "t1_medium.json");
+    });
+
+    it("repeats the only tank in the pool", () => {
+        const alone = [{ fileName: "t1_small_2.json" }];
+        assert.equal(chooseEnemyRecord(alone, "t1_small_2.json", 0).fileName, "t1_small_2.json");
+    });
+
+    it("uses the whole pool when this tier has not fought that file", () => {
+        assert.equal(chooseEnemyRecord(pool, "t2_small.json", 0).fileName, "t1_small_2.json");
+        assert.equal(chooseEnemyRecord(pool, null, 0.99).fileName, "t1_medium.json");
     });
 });

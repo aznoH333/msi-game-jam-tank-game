@@ -4,6 +4,7 @@ import { drawSprite } from "../drawing/sprites";
 import { drawText, measureText } from "../drawing/text";
 import type { GameState } from "../game/gameState";
 import { transitionToNextEvent } from "../gamedirector/gamedirector";
+import { isPostTutorialBossShop } from "../gamedirector/schedule";
 import { consumeWheelDelta, getMousePosition, isMouseButtonDown } from "../input/input";
 import { drawAbilityBarMoney } from "../combat/abilityBar";
 import { buyOffer } from "./itemShop";
@@ -11,7 +12,7 @@ import { drawBuildingSidebar, drawModuleOffer, layoutSidebar, moduleOfferBounds,
 import { drawItemShop, layoutItemShop } from "../ui/itemShopPanel";
 import { drawOverclockPanel, layoutOverclockCards } from "../ui/overclockPanel";
 import { tutorialSlots, type TutorialSlot } from "./tutorialSlots";
-import { continueWithTutorialCard, dialogBlocksPlayer, getCurrentDialogCard, notifyTutorialPlacement, shopActionAllowed, tutorialPlacementMustAttach } from "../ui/textCard";
+import { continueWithTutorialCard, dialogBlocksPlayer, getCurrentDialogCard, notifyOverclockInstalled, notifyTutorialPlacement, queueTrashTutorial, shopActionAllowed, startOverclockTutorial, tutorialPlacementMustAttach } from "../ui/textCard";
 import { DETAILS_SIDEBAR_WIDTH, drawVehicleDetailsSidebar, updateVehicleNameInput } from "../ui/vehicleDetailsSidebar";
 import { TILE_CATALOG } from "./constants/tileCatalog";
 import { serializeVehicle } from "./vehicleSave";
@@ -276,6 +277,9 @@ function placementTouchesVehicle(tiles: PlacedTile[], origin: { x: number; y: nu
 }
 
 export function updateVehicleEditor(state: GameState): void {
+    if (isPostTutorialBossShop(state.gameDirector)) {
+        state.playerData.overclockModules = startOverclockTutorial(state.playerData.overclockModules);
+    }
     const mouse = getMousePosition();
     const wheel = consumeWheelDelta();
     const paneWidth = Math.max(0, GAME_WIDTH - SIDEBAR_WIDTH - DETAILS_SIDEBAR_WIDTH);
@@ -376,6 +380,9 @@ export function updateVehicleEditor(state: GameState): void {
     const weaponSlots = state.playerData.vehicleWeaponSlots;
     if (shopActionAllowed("go") && leftPressed && brokenVehicleRules(state.playerData.vehicle, weaponSlots).length === 0 && hits(goButton, mouse.x, mouse.y)) {
         continueWithTutorialCard();
+        if (isPostTutorialBossShop(state.gameDirector)) {
+            queueTrashTutorial();
+        }
         transitionToNextEvent();
     }
     const copyClicked = shopActionAllowed("copy") && cheatEnabled && leftPressed && hits(copyButton, mouse.x, mouse.y);
@@ -452,6 +459,7 @@ export function updateVehicleEditor(state: GameState): void {
                         state.playerData.overclockModules = adjusted.modules;
                         if (installed) {
                             playSound("building/overclock_install");
+                            notifyOverclockInstalled();
                         } else {
                             playSound("building/overclock_uninstall");
                         }

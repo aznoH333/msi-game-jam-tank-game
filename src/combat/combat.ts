@@ -270,7 +270,10 @@ export function updateCombat(): void {
         combatAttempt = directorAttempt();
         const bossFight = combatIsBoss(state.gameDirector, tierHasRegulars(state.gameDirector.tier));
         encounterBoss = bossFight;
-        const picked = pickEnemyVehicle(state.gameDirector.tier, bossFight);
+        const picked = pickEnemyVehicle(state.gameDirector.tier, bossFight, state.gameDirector.lastEnemyFile);
+        if (!bossFight) {
+            state.gameDirector.lastEnemyFile = picked.fileName;
+        }
         moneyAwarded = false;
         battle = createBattle(state.playerData.vehicle, picked.vehicle, picked.moneyDropped);
         if (isFirstCombat()) {

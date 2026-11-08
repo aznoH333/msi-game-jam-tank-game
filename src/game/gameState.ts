@@ -7,8 +7,8 @@ import { explorationScreenUpdate } from "./explorationScreen";
 import { gameOverUpdate } from "./gameOver";
 import { mainMenuUpdate } from "./mainMenu";
 import { PlayerData, initPlayerData } from "./playerData";
-import { requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
-import { activeDialogId, resetTutorialProgress, startDialogChain, stopDialog, updateDialog } from "../ui/textCard";
+import { isScreenTransitionIdle, requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
+import { activeDialogId, playQueuedTrashTutorial, resetTutorialProgress, startDialogChain, stopDialog, updateDialog } from "../ui/textCard";
 
 
 export type GameScreen = "MAIN_MENU" | "BUILDING_SCREEN" | "COMBAT_SCREEN" | "EXPLORATION_SCREEN" | "GAME_OVER_SCREEN";
@@ -47,6 +47,9 @@ export function getGameState(): GameState {
 
 export function updateGame(state: GameState) {
     updateScreenTransition();
+    if (isScreenTransitionIdle()) {
+        playQueuedTrashTutorial();
+    }
     if (activeDialogId() === "combat_tutorial") {
         const fighting = state.currentScreen === "COMBAT_SCREEN" && state.gameDirector.currentEventType === "COMBAT";
         if (!fighting) {

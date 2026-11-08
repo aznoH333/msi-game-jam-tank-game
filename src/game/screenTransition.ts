@@ -43,6 +43,11 @@ export function updateScreenTransition(): void {
     }
 }
 
+/** True once the fade-out and fade-in have both finished. */
+export function isScreenTransitionIdle(): boolean {
+    return phase === "idle";
+}
+
 /** 0 is the picture, 1 is fully black. */
 export function screenFadeAlpha(): number {
     const half = TRANSITION_SECONDS / 2;

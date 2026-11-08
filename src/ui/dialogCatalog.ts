@@ -53,6 +53,39 @@ export const dialogCatalog: DialogChain[] = [
                 specialIdentifier: "shooting_tutorial_1",
             },
         ]
+    },
+
+    {
+        dialogIdentifier: "overclock_tutorial",
+        cards: [
+            {
+                text: "It seems i have found an overclock module. Overclock modules can be installed on weapons, improving their power.",
+                type: "BLOCKING",
+            },
+            {
+                text: "Install an overclock by clicking the overclock tab and selecting a weapon. Then pick an overclock from the list.",
+                type: "TUTORIAL",
+                specialIdentifier: "overclock_place_tutorial"
+            },
+            {
+                text: "Overclock modules can be removed and placed on different weapons.",
+                type: "BLOCKING",
+            },
+            {
+                text: "Overclocked weapons may jam or break when firing. I should consider their  placement carefully.",
+                type: "BLOCKING",
+            }
+        ]
+    },
+
+    {
+        dialogIdentifier: "trash_tutorial",
+        cards: [
+            {
+                text: "Trash on the streets can be picked up by clicking. This is a good source of extra overclocks and money.",
+                type: "NORMAL"
+            }
+        ]
     }
 
 

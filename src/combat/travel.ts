@@ -1,6 +1,6 @@
 import { playSound, setEngineBlend } from "../audio/audio";
 import { placedWeaponCount } from "../building/vehicleRules";
-import { getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
+import { availableOverclockModules, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
 import { boxTriangles, drawScene3D, planeTriangles, projectBillboard, type Billboard3D, type Camera3D, type FaceTexture, type Triangle3D, type Vec3 } from "../drawing/3d";
@@ -413,7 +413,8 @@ function openLoot(
         return;
     }
     const state = getGameState();
-    const reward = rollLootReward(state.playerData.overclockModules, state.gameDirector.tier, Math.random());
+    const modules = availableOverclockModules(state.playerData.overclockModules, state.playerData.vehicle.tiles);
+    const reward = rollLootReward(modules, state.gameDirector.tier, Math.random());
     openedLoot.set(best.index, { at: travelTime, reward });
     playSound("misc/loot_opened");
     if (reward.kind === "money") {

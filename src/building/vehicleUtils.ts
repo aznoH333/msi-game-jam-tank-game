@@ -106,6 +106,11 @@ export function modulesInTile(tile: PlacedTile): number {
     return tile.overclocks.reduce((sum, overclock) => sum + overclockModulesUsed(overclock), 0);
 }
 
+/** Free modules plus every module already installed on the vehicle. */
+export function availableOverclockModules(freeModules: number, tiles: readonly PlacedTile[]): number {
+    return freeModules + tiles.reduce((sum, tile) => sum + modulesInTile(tile), 0);
+}
+
 /**
  * Move one step. A step that adds modules costs `stepCost`. A step that removes them refunds that many.
  * Tuning at or below the stock value does not pay modules out.

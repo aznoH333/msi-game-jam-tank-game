@@ -25,6 +25,8 @@ export interface GameDirector {
     shopEvery: number;
     /** The next stop after travel is the shop that follows a boss. */
     bossShopPending: boolean;
+    /** Regular enemy file from the previous fight. The next regular fight avoids it when it can. */
+    lastEnemyFile: string | null;
 }
 
 /** Inits empty game director ("new game") */
@@ -38,6 +40,7 @@ export function initGameDirector(): GameDirector {
         fightsSinceShop: 0,
         shopEvery: rollShopEvery(),
         bossShopPending: false,
+        lastEnemyFile: null,
     };
 }
 

@@ -49,6 +49,11 @@ export function recordCombatVictory(director: GameDirector, boss: boolean): void
     director.fightsSinceShop += 1;
 }
 
+/** The shop after the tier 0 boss. No tier 1 fight has been won yet. */
+export function isPostTutorialBossShop(director: GameDirector): boolean {
+    return director.currentEventType === "SHOP" && director.tier === 1 && director.combatsThisTier === 0;
+}
+
 /** Arriving at a shop starts a fresh 2–3 fight gap. */
 export function noteShopEntered(director: GameDirector, shopEvery = rollShopEvery()): void {
     director.fightsSinceShop = 0;

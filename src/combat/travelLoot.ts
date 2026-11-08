@@ -29,6 +29,7 @@ export function recommendedModules(tier: number): number {
 
 /**
  * Rolled when a container is opened.
+ * `modulesOwned` is every module the player can use, including ones already installed.
  * Below the tier's module target, the find is an even chance of a module or money. At the target, it is money.
  */
 export function rollLootReward(modulesOwned: number, tier: number, roll: number): LootReward {

@@ -1,5 +1,6 @@
 import type { BaseVehicle } from "../../building/types/vehicle";
 import { vehicleFromSave, type SavedVehicle } from "../../building/vehicleSave";
+import { chooseEnemyRecord } from "../enemyPick";
 
 export interface EnemyCatalogRecord {
     fileName: string;
@@ -12,6 +13,7 @@ export interface EnemyCatalogRecord {
 export interface PickedEnemy {
     vehicle: BaseVehicle;
     moneyDropped: number;
+    fileName: string;
 }
 
 
@@ -147,13 +149,17 @@ export function tierHasRegulars(tier: number): boolean {
     return ENEMY_CATALOG.some((record) => record.vehicleTier === tier && !record.isBoss);
 }
 
-/** A random tank from this tier. Boss picks the tier boss. An empty tier uses the last one that has that role. */
-export function pickEnemyVehicle(tier: number, boss: boolean): PickedEnemy {
+/**
+ * A random tank from this tier. Boss picks the tier boss.
+ * A regular fight skips `avoidFile` when the tier has another tank.
+ * An empty tier uses the last one that has that role.
+ */
+export function pickEnemyVehicle(tier: number, boss: boolean, avoidFile: string | null = null): PickedEnemy {
     const available = enemiesAt(tier, boss);
-    const record = available[Math.floor(Math.random() * available.length)];
-    if (!record) {
+    if (available.length === 0) {
         throw new Error(`No ${boss ? "boss" : "enemy"} is available at tier ${tier}`);
     }
+    const record = chooseEnemyRecord(available, boss ? null : avoidFile, Math.random());
     const vehicle = Object.entries(enemyVehicleFiles).find(([path]) => path.endsWith(`/${record.fileName}`))?.[1];
     if (!vehicle) {
         throw new Error(`Missing enemy file ${record.fileName}`);
@@ -161,6 +167,7 @@ export function pickEnemyVehicle(tier: number, boss: boolean): PickedEnemy {
     return {
         vehicle: vehicleFromSave(vehicle),
         moneyDropped: record.moneyDropped,
+        fileName: record.fileName,
     };
 }
 

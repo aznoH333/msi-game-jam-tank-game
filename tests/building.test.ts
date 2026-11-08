@@ -5,7 +5,7 @@ import { buyOffer, shopOffers } from "../src/building/itemShop";
 import { tankTrackColumns, tankTrackSprite } from "../src/building/tankTracks";
 import type { PlacedTile, WeaponOverclockInstance } from "../src/building/types/tiles";
 import { serializeVehicle, vehicleFromSave } from "../src/building/vehicleSave";
-import { adjustOverclock, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
+import { adjustOverclock, availableOverclockModules, getOverclockedTurretStats, modulesInTile } from "../src/building/vehicleUtils";
 import { brokenVehicleRules, buyOverclockModule, OVERCLOCK_MODULE_PRICE } from "../src/building/vehicleRules";
 import { initPlayerData } from "../src/game/playerData";
 
@@ -197,6 +197,13 @@ describe("overclock modules", () => {
         const gun = part(0, 0, 1, 1, true);
         gun.overclocks = [{ ...slider, value: 0.5 }];
         assert.equal(modulesInTile(gun), 6);
+    });
+
+    it("counts free modules and modules already installed on the vehicle", () => {
+        const gun = part(0, 0, 1, 1, true);
+        gun.overclocks = [overclock(0.5)];
+        assert.equal(availableOverclockModules(2, [gun, part(1, 0)]), 4);
+        assert.equal(availableOverclockModules(0, [gun]), 2);
     });
 });
 

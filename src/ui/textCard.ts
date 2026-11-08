@@ -45,6 +45,9 @@ let active: ActiveDialog | null = null;
 let spaceWasDown = false;
 let lastMs = 0;
 let firstCombatTutorialDone = false;
+let overclockTutorialDone = false;
+let trashTutorialDone = false;
+let trashTutorialQueued = false;
 let trackedTutorial = "";
 let placedGenerator = false;
 let placedBattery = false;
@@ -83,9 +86,43 @@ export function stopDialog(): void {
     active = null;
 }
 
-/** A new run should see the first-combat tutorial again. */
+/** A new run should see the tutorials again. */
 export function resetTutorialProgress(): void {
     firstCombatTutorialDone = false;
+    overclockTutorialDone = false;
+    trashTutorialDone = false;
+    trashTutorialQueued = false;
+}
+
+/**
+ * Shop after the intro boss. Starts once.
+ * Returns the module count, with one module added when the player is holding none.
+ */
+export function startOverclockTutorial(modulesOwned: number): number {
+    if (overclockTutorialDone || active) {
+        return modulesOwned;
+    }
+    const modules = modulesOwned < 1 ? 1 : modulesOwned;
+    startDialogChain("overclock_tutorial");
+    return modules;
+}
+
+/** Show the trash line after the road is on screen, not during the shop fade. */
+export function queueTrashTutorial(): void {
+    if (trashTutorialDone || trashTutorialQueued || active) {
+        return;
+    }
+    trashTutorialQueued = true;
+}
+
+/** Starts the queued trash line. Call only once the screen transition is idle. */
+export function playQueuedTrashTutorial(): void {
+    if (!trashTutorialQueued || active) {
+        return;
+    }
+    trashTutorialQueued = false;
+    trashTutorialDone = true;
+    startDialogChain("trash_tutorial");
 }
 
 /** Starts the combat tutorial once per run, on the first fight only. */
@@ -121,6 +158,9 @@ export function shopActionAllowed(action: ShopAction, detail = ""): boolean {
     }
     if (card.specialIdentifier === "go_tutorial") {
         return action === "go";
+    }
+    if (card.specialIdentifier === "overclock_place_tutorial") {
+        return (action === "tab" && detail === "OVERCLOCK") || action === "overclock";
     }
     return false;
 }
@@ -162,6 +202,13 @@ export function combatGunSelectAllowed(index: number): boolean {
         return false;
     }
     return card.specialIdentifier === "shooting_tutorial_1" && index === 0;
+}
+
+/** The overclock tutorial ends its action card once a module is installed. */
+export function notifyOverclockInstalled(): void {
+    if (getCurrentDialogCard()?.specialIdentifier === "overclock_place_tutorial") {
+        continueWithTutorialCard();
+    }
 }
 
 /** The shooting tutorial ends once a shot actually leaves the gun. */
@@ -257,6 +304,9 @@ function advanceCard(): void {
     if (active.index >= active.chain.cards.length) {
         if (chainId === "combat_tutorial") {
             firstCombatTutorialDone = true;
+        }
+        if (chainId === "overclock_tutorial") {
+            overclockTutorialDone = true;
         }
         active = null;
     }
