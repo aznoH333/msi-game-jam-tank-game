@@ -40,6 +40,15 @@ export interface Billboard3D {
     alpha?: number;
 }
 
+/** Screen-space sprite drawn with the sky, so the world covers it. `x` and `y` are the center. */
+export interface SkySprite {
+    sprite: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 export interface ScreenRect {
     x: number;
     y: number;
@@ -73,6 +82,8 @@ export interface Scene3D {
         eyeAboveFloor?: number;
         eyeBelowCeiling?: number;
     };
+    /** Painted after the sky fill and before the world. */
+    skySprite?: SkySprite;
     fog?: DistanceFog;
 }
 
@@ -106,6 +117,8 @@ let groundView: WebGLUniformLocation | null = null;
 let skyProgram: WebGLProgram | null = null;
 let skyTop: WebGLUniformLocation | null = null;
 let skyBottom: WebGLUniformLocation | null = null;
+let skySpriteProgram: WebGLProgram | null = null;
+let skySpriteSampler: WebGLUniformLocation | null = null;
 let spriteProgram: WebGLProgram | null = null;
 let spriteViewProj: WebGLUniformLocation | null = null;
 let spriteSampler: WebGLUniformLocation | null = null;
@@ -127,12 +140,14 @@ function emptyFogUniforms(): FogUniforms {
 
 let triBuffer: WebGLBuffer | null = null;
 let groundBuffer: WebGLBuffer | null = null;
+let skySpriteBuffer: WebGLBuffer | null = null;
 let spriteBuffer: WebGLBuffer | null = null;
 let texBuffer: WebGLBuffer | null = null;
 let triData = new Float32Array(4096);
 let texData = new Float32Array(4096);
 let uploadedTriangles: Triangle3D[] | null = null;
 const spriteData = new Float32Array(30);
+const skySpriteData = new Float32Array(24);
 const viewProj = new Float32Array(16);
 const textures = new Map<string, WebGLTexture>();
 
@@ -220,6 +235,27 @@ uniform vec3 u_bottom;
 varying float v_y;
 void main() {
     gl_FragColor = vec4(mix(u_bottom, u_top, v_y), 1.0);
+}
+`;
+
+const SKY_SPRITE_VS = `
+attribute vec2 a_position;
+attribute vec2 a_uv;
+varying vec2 v_uv;
+void main() {
+    v_uv = a_uv;
+    gl_Position = vec4(a_position, 1.0, 1.0);
+}
+`;
+
+const SKY_SPRITE_FS = `
+precision mediump float;
+uniform sampler2D u_texture;
+varying vec2 v_uv;
+void main() {
+    vec4 color = texture2D(u_texture, v_uv);
+    if (color.a <= 0.5) discard;
+    gl_FragColor = vec4(color.rgb, 1.0);
 }
 `;
 
@@ -410,6 +446,7 @@ function paintScene(gpu: WebGLRenderingContext, context: CanvasRenderingContext2
     if (scene.horizon) {
         paintHorizon(gpu, scene, vx, vy, vw, vh);
     }
+    paintSkySprite(gpu, scene);
     gpu.enable(gpu.DEPTH_TEST);
     gpu.depthMask(true);
 
@@ -437,6 +474,51 @@ function paintSky(gpu: WebGLRenderingContext, scene: Scene3D): void {
     gpu.disableVertexAttribArray(1);
     gpu.vertexAttribPointer(0, 2, gpu.FLOAT, false, 0, 0);
     gpu.drawArrays(gpu.TRIANGLES, 0, HORIZON_VERTS.length / 2);
+}
+
+/** A sky decoration. Depth stays off, so the road and buildings paint over it. */
+function paintSkySprite(gpu: WebGLRenderingContext, scene: Scene3D): void {
+    const sprite = scene.skySprite;
+    if (!sprite || !skySpriteProgram || !skySpriteBuffer) {
+        return;
+    }
+    const texture = spriteTexture(gpu, sprite.sprite);
+    const view = scene.viewport;
+    if (!texture || view.width <= 0 || view.height <= 0) {
+        return;
+    }
+    const centerX = ((sprite.x - view.x) / view.width) * 2 - 1;
+    const centerY = 1 - ((sprite.y - view.y) / view.height) * 2;
+    const halfWidth = sprite.width / view.width;
+    const halfHeight = sprite.height / view.height;
+    const corners: readonly [number, number, number, number][] = [
+        [centerX - halfWidth, centerY - halfHeight, 0, 1],
+        [centerX + halfWidth, centerY - halfHeight, 1, 1],
+        [centerX + halfWidth, centerY + halfHeight, 1, 0],
+        [centerX - halfWidth, centerY - halfHeight, 0, 1],
+        [centerX + halfWidth, centerY + halfHeight, 1, 0],
+        [centerX - halfWidth, centerY + halfHeight, 0, 0],
+    ];
+    let offset = 0;
+    for (const corner of corners) {
+        skySpriteData[offset++] = corner[0];
+        skySpriteData[offset++] = corner[1];
+        skySpriteData[offset++] = corner[2];
+        skySpriteData[offset++] = corner[3];
+    }
+    gpu.disable(gpu.DEPTH_TEST);
+    gpu.depthMask(false);
+    gpu.useProgram(skySpriteProgram);
+    gpu.uniform1i(skySpriteSampler, 0);
+    gpu.bindBuffer(gpu.ARRAY_BUFFER, skySpriteBuffer);
+    gpu.bufferData(gpu.ARRAY_BUFFER, skySpriteData, gpu.DYNAMIC_DRAW);
+    gpu.enableVertexAttribArray(0);
+    gpu.enableVertexAttribArray(1);
+    gpu.vertexAttribPointer(0, 2, gpu.FLOAT, false, 16, 0);
+    gpu.vertexAttribPointer(1, 2, gpu.FLOAT, false, 16, 8);
+    gpu.activeTexture(gpu.TEXTURE0);
+    gpu.bindTexture(gpu.TEXTURE_2D, texture);
+    gpu.drawArrays(gpu.TRIANGLES, 0, 6);
 }
 
 function paintHorizon(gpu: WebGLRenderingContext, scene: Scene3D, vx: number, vy: number, vw: number, vh: number): void {
@@ -794,6 +876,8 @@ function initPrograms(gpu: WebGLRenderingContext): void {
     skyProgram = linkProgram(gpu, SKY_VS, SKY_FS, ["a_position"]);
     skyTop = gpu.getUniformLocation(skyProgram, "u_top");
     skyBottom = gpu.getUniformLocation(skyProgram, "u_bottom");
+    skySpriteProgram = linkProgram(gpu, SKY_SPRITE_VS, SKY_SPRITE_FS, ["a_position", "a_uv"]);
+    skySpriteSampler = gpu.getUniformLocation(skySpriteProgram, "u_texture");
     spriteProgram = linkProgram(gpu, SPRITE_VS, SPRITE_FS, ["a_position", "a_uv"]);
     spriteViewProj = gpu.getUniformLocation(spriteProgram, "u_viewProj");
     spriteSampler = gpu.getUniformLocation(spriteProgram, "u_texture");
@@ -803,6 +887,7 @@ function initPrograms(gpu: WebGLRenderingContext): void {
 
     triBuffer = gpu.createBuffer();
     groundBuffer = gpu.createBuffer();
+    skySpriteBuffer = gpu.createBuffer();
     spriteBuffer = gpu.createBuffer();
     texBuffer = gpu.createBuffer();
     gpu.bindBuffer(gpu.ARRAY_BUFFER, groundBuffer);

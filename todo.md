@@ -1,15 +1,4 @@
-# General todo
-- [X] Building screen
-- [X] Combat screen
-- [ ] Main menu
-- [X] Game loop
-- [X] Progression
-- [ ] Graphics
-- [ ] Audio
-- [ ] Indoor first person shooting/exploration sections.
-- [ ] Weapon blueprint unlocks
-- [ ] Weapon overclock unlocks
-- [ ] Tutorial/shop guy
+
 
 
 
@@ -18,15 +7,14 @@
 
 
 # short term goals.
-- [X] talking guy
-- [ ] add lucky lines and tutorial
-- [ ] add button and gui noises
-- [ ] rebalance tiles again
-- [ ] overworld loot
-- [ ] nuclear reactor
-- [ ] overclock select indicator
-- [ ] overclock sound
-- [ ] weapon ready sound
-- [ ] weapon reload bars
-- [ ] repair sound
-- [ ] blinking indicator for shooting and repairing
+- [ ] Add sun.png
+- [ ] Add intro and outro screens
+- [ ] Change talking sound
+- [ ] change the color of batteries
+- [ ] Put travel visuals in main menu.
+- [ ] Add link to github in main menu
+- [ ] Add boss indicators
+- [ ] Add travel progress bar.
+- [ ] Upload to itch
+- [ ] Screenshots for itch page
+- [ ] Description for itch page

@@ -3,7 +3,7 @@ import { placedWeaponCount } from "../building/vehicleRules";
 import { availableOverclockModules, getPowerPerSecond, getTotalPowerCapacity } from "../building/vehicleUtils";
 import type { BaseVehicle } from "../building/types/vehicle";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH } from "../drawing/canvas";
-import { boxTriangles, drawScene3D, planeTriangles, projectBillboard, type Billboard3D, type Camera3D, type FaceTexture, type Triangle3D, type Vec3 } from "../drawing/3d";
+import { boxTriangles, drawScene3D, planeTriangles, projectBillboard, type Billboard3D, type Camera3D, type FaceTexture, type SkySprite, type Triangle3D, type Vec3 } from "../drawing/3d";
 import { drawSprite } from "../drawing/sprites";
 import { drawText, measureText } from "../drawing/text";
 import { getGameState } from "../game/gameState";
@@ -118,6 +118,7 @@ export function updateTravel(): void {
         camera,
         triangles: streetTriangles(cameraZ),
         billboards: [...trashBillboards(cameraZ), ...lootBillboards(cameraZ, loot), eventBillboard(cameraZ, nextEvent)],
+        skySprite: travelSun(cityView),
     });
     drawLootPopups(camera, cityView, cameraZ, loot);
     drawText({
@@ -349,6 +350,24 @@ function eventSprite(next: EventType): string {
         return COMBAT_EVENT_SPRITE;
     }
     return EVENT_SPRITE;
+}
+
+const SUN_SPRITE = "world/textures/sun";
+/** sun.png is 100×72. */
+const SUN_SCALE = 3;
+const SUN_WIDTH = 100 * SUN_SCALE;
+const SUN_HEIGHT = 72 * SUN_SCALE;
+/** Fraction down the travel view. The road paints over whatever reaches it. */
+const SUN_Y = 0.22;
+
+function travelSun(view: { x: number; y: number; width: number; height: number }): SkySprite {
+    return {
+        sprite: SUN_SPRITE,
+        x: view.x + view.width / 2,
+        y: view.y + view.height * SUN_Y,
+        width: SUN_WIDTH,
+        height: SUN_HEIGHT,
+    };
 }
 
 function lootBillboards(cameraZ: number, loot: readonly StreetLoot[]): Billboard3D[] {
