@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { GameDirector } from "../src/gamedirector/gamedirector";
-import { initPlayerData } from "../src/game/playerData";
+import { enemyBounty, initPlayerData } from "../src/game/playerData";
 import { fromSavedRun, toSavedRun, type SavedTutorials } from "../src/game/save";
 
 const tutorials: SavedTutorials = {
@@ -43,8 +43,20 @@ describe("saved run", () => {
         assert.equal(loaded.director.tier, 2);
         assert.equal(loaded.director.lastEnemyFile, "t1_cannon.json");
         assert.equal(loaded.screen, "BUILDING_SCREEN");
+        assert.equal(loaded.player.difficulty, "hard");
+        assert.equal(loaded.player.vehicleWeaponSlots, 3);
         assert.equal(loaded.tutorials.firstCombatTutorialDone, true);
         assert.equal(loaded.tutorials.overclockTutorialDone, false);
+
+        const normal = initPlayerData("normal");
+        assert.equal(normal.vehicleWeaponSlots, 4);
+        assert.equal(enemyBounty(2000, "hard"), 2000);
+        assert.equal(enemyBounty(2000, "normal"), 2400);
+        const withoutDifficulty = JSON.parse(JSON.stringify(saved)) as { player: { difficulty?: string } };
+        delete withoutDifficulty.player.difficulty;
+        const legacy = fromSavedRun(withoutDifficulty);
+        assert.ok(legacy);
+        assert.equal(legacy.player.difficulty, "hard");
     });
 
     it("rejects a save that is missing the run", () => {

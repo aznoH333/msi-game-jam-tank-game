@@ -3,7 +3,8 @@ import { drawStillStreet } from "../combat/travel";
 import { drawRect, GAME_HEIGHT, GAME_WIDTH, gameToClient } from "../drawing/canvas";
 import { drawText } from "../drawing/text";
 import { getMousePosition, isKeyDown, isMouseButtonDown } from "../input/input";
-import { discardRun, resumeSavedRun, switchGameState } from "./gameState";
+import { queueNewGame, resumeSavedRun, switchGameState } from "./gameState";
+import type { Difficulty } from "./playerData";
 import { hasSavedRun } from "./save";
 import { screenFadeAlpha } from "./screenTransition";
 import { openIntro } from "./storyScreen";
@@ -18,16 +19,18 @@ const REPO_URL = "https://github.com/aznoH333/msi-game-jam-tank-game";
 let leftWasDown = false;
 let startWasDown = false;
 let armed = false;
+let pickingDifficulty = false;
 let repoLink: HTMLAnchorElement | null = null;
 
 /** Leave a run and show the title screen. */
 export function returnToMainMenu(): void {
     armed = false;
+    pickingDifficulty = false;
     stopEngine();
     switchGameState("MAIN_MENU");
 }
 
-/** Title screen. Play resumes a stored run, or opens the intro when there is none. */
+/** Title screen. Continue resumes a stored run. New Game asks for a difficulty, then opens the intro. */
 export function mainMenuUpdate(): void {
     stopEngine();
     const mouse = getMousePosition();
@@ -45,19 +48,19 @@ export function mainMenuUpdate(): void {
 
     drawStillStreet({ x: 0, y: 0, width: GAME_WIDTH, height: GAME_HEIGHT });
 
-    const play = {
+    const top = {
         x: GAME_WIDTH / 2 - BUTTON_WIDTH / 2,
         y: GAME_HEIGHT / 2,
         width: BUTTON_WIDTH,
         height: BUTTON_HEIGHT,
     };
-    const reset = {
-        x: play.x,
-        y: play.y + BUTTON_HEIGHT + BUTTON_GAP,
+    const bottom = {
+        x: top.x,
+        y: top.y + BUTTON_HEIGHT + BUTTON_GAP,
         width: BUTTON_WIDTH,
         height: BUTTON_HEIGHT,
     };
-    const titleY = play.y - 88;
+    const titleY = top.y - 88;
     drawText({
         text: TITLE,
         x: GAME_WIDTH / 2 + 5,
@@ -76,19 +79,50 @@ export function mainMenuUpdate(): void {
         align: "center",
         baseline: "middle",
     });
-    drawButton(play, "Play", hits(play, mouse) ? "#37b24d" : "#2f9e44", "#f4fff6");
-    drawButton(reset, "Reset", hits(reset, mouse) ? "#a33b45" : "#8a3038", "#f4fff6");
     placeRepoLink();
 
-    if (leftPressed && hits(reset, mouse)) {
-        discardRun();
+    if (pickingDifficulty) {
+        drawText({
+            text: "Difficulty",
+            x: GAME_WIDTH / 2,
+            y: top.y - 36,
+            font: "22px sans-serif",
+            color: "#d7d5cf",
+            align: "center",
+            baseline: "middle",
+        });
+        drawButton(top, "Normal", hits(top, mouse) ? "#37b24d" : "#2f9e44", "#f4fff6");
+        drawButton(bottom, "Hard", hits(bottom, mouse) ? "#37b24d" : "#2f9e44", "#f4fff6");
+        if (leftPressed && hits(top, mouse)) {
+            startAtDifficulty("normal");
+        } else if (leftPressed && hits(bottom, mouse)) {
+            startAtDifficulty("hard");
+        }
         return;
     }
-    if (startPressed || (leftPressed && hits(play, mouse))) {
-        if (!hasSavedRun() || !resumeSavedRun()) {
-            openIntro();
-        }
+
+    const canContinue = hasSavedRun();
+    if (canContinue && hits(top, mouse)) {
+        drawButton(top, "Continue", "#37b24d", "#f4fff6");
+    } else if (canContinue) {
+        drawButton(top, "Continue", "#2f9e44", "#f4fff6");
+    } else {
+        drawButton(top, "Continue", "#2a3040", "#6d7380");
     }
+    drawButton(bottom, "New Game", hits(bottom, mouse) ? "#37b24d" : "#2f9e44", "#f4fff6");
+
+    if (leftPressed && hits(bottom, mouse)) {
+        pickingDifficulty = true;
+        return;
+    }
+    if (canContinue && (startPressed || (leftPressed && hits(top, mouse)))) {
+        resumeSavedRun();
+    }
+}
+
+function startAtDifficulty(difficulty: Difficulty): void {
+    queueNewGame(difficulty);
+    openIntro();
 }
 
 /** The repository link only belongs on the title screen. */

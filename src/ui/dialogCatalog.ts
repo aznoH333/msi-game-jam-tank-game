@@ -14,7 +14,7 @@ export const dialogCatalog: DialogChain[] = [
                 type: "BLOCKING",
             },
             {
-                text: "Click the weapons tab in the left panel. Select a weapon and place it in the vehicle by pressing the left mouse button",
+                text: "Click the weapons tab in the left panel. Select a weapon and place it in the vehicle by pressing the left mouse button.",
                 type: "TUTORIAL",
                 specialIdentifier: "gun_place_tutorial",
             },
@@ -23,7 +23,7 @@ export const dialogCatalog: DialogChain[] = [
                 type: "BLOCKING",
             },
             {
-                text: "Click the utility tab and place a generator and a battery",
+                text: "Click the utility tab and place a generator and a battery.",
                 type: "TUTORIAL",
                 specialIdentifier: "power_place_tutorial",
             },
@@ -48,7 +48,7 @@ export const dialogCatalog: DialogChain[] = [
                 type: "BLOCKING",
             },
             {
-                text: "Select the gun in the left panel (press 1) and fire it at the enemy tank using the left mouse button",
+                text: "Select the gun in the left panel (press 1) and fire it at the enemy tank using the left mouse button.",
                 type: "TUTORIAL",
                 specialIdentifier: "shooting_tutorial_1",
             },
@@ -59,7 +59,7 @@ export const dialogCatalog: DialogChain[] = [
         dialogIdentifier: "overclock_tutorial",
         cards: [
             {
-                text: "It seems i have found an overclock module. Overclock modules can be installed on weapons, improving their power.",
+                text: "It seems I have found an overclock module. Overclock modules can be installed on weapons, improving their power.",
                 type: "BLOCKING",
             },
             {
@@ -72,7 +72,7 @@ export const dialogCatalog: DialogChain[] = [
                 type: "BLOCKING",
             },
             {
-                text: "Overclocked weapons may jam or break when firing. I should consider their  placement carefully.",
+                text: "Overclocked weapons may jam or break when firing. I should consider their placement carefully.",
                 type: "BLOCKING",
             }
         ]

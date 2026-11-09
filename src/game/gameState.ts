@@ -7,8 +7,8 @@ import { explorationScreenUpdate } from "./explorationScreen";
 import { gameOverUpdate } from "./gameOver";
 import { logoScreenUpdate } from "./logoScreen";
 import { hideRepoLink, mainMenuUpdate } from "./mainMenu";
-import { PlayerData, initPlayerData } from "./playerData";
-import { clearSavedRun, isSavedScreen, loadSavedRun, writeSavedRun } from "./save";
+import { Difficulty, PlayerData, initPlayerData } from "./playerData";
+import { isSavedScreen, loadSavedRun, writeSavedRun } from "./save";
 import { isScreenTransitionIdle, requestTransition, screenFadeAlpha, updateScreenTransition } from "./screenTransition";
 import { storyScreenUpdate } from "./storyScreen";
 import { activeDialogId, playQueuedTrashTutorial, resetTutorialProgress, restoreTutorialProgress, startDialogChain, stopDialog, tutorialProgress, updateDialog } from "../ui/textCard";
@@ -119,12 +119,19 @@ function musicFor(state: GameState): string | null {
     return null;
 }
 
+let pendingDifficulty: Difficulty = "hard";
+
+/** Remember the difficulty chosen on the title screen. The intro starts the run with it. */
+export function queueNewGame(difficulty: Difficulty): void {
+    pendingDifficulty = difficulty;
+}
+
 /** Replace the run and open the first shop. */
 export function startNewGame(): void {
     requestTransition(() => {
         beginAttempt();
         const state = getGameState();
-        state.playerData = initPlayerData();
+        state.playerData = initPlayerData(pendingDifficulty);
         state.gameDirector = initGameDirector();
         state.currentScreen = "BUILDING_SCREEN";
         resetTutorialProgress();
@@ -148,16 +155,6 @@ export function resumeSavedRun(): boolean {
         stopDialog();
     });
     return true;
-}
-
-/** Drop the stored run so the next Play starts from the intro. */
-export function discardRun(): void {
-    clearSavedRun();
-    const state = getGameState();
-    state.playerData = initPlayerData();
-    state.gameDirector = initGameDirector();
-    resetTutorialProgress();
-    stopDialog();
 }
 
 export function switchGameState(newState: GameScreen) {

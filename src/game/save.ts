@@ -28,6 +28,7 @@ interface SavedPlayer {
     weapons: PlayerData["weapons"];
     personHealth: number;
     vehicleWeaponSlots: number;
+    difficulty: PlayerData["difficulty"];
     unlockedTiles: string[];
 }
 
@@ -111,6 +112,7 @@ export function toSavedRun(player: PlayerData, director: GameDirector, screen: S
             weapons: player.weapons,
             personHealth: player.personHealth,
             vehicleWeaponSlots: player.vehicleWeaponSlots,
+            difficulty: player.difficulty,
             unlockedTiles: player.unlockedTiles.slice(),
         },
         director: {
@@ -165,6 +167,7 @@ export function fromSavedRun(value: unknown): LoadedRun | null {
                 weapons: player.weapons as PlayerData["weapons"],
                 personHealth: player.personHealth,
                 vehicleWeaponSlots: player.vehicleWeaponSlots,
+                difficulty: player.difficulty === "normal" ? "normal" : "hard",
                 unlockedTiles: player.unlockedTiles.slice(),
             },
             director,

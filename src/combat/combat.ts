@@ -8,7 +8,7 @@ import { drawSprite, getSpriteSize } from "../drawing/sprites";
 import { openGameOver } from "../game/gameOver";
 import { getGameState } from "../game/gameState";
 import { openOutro } from "../game/storyScreen";
-import { unlockVehicleTiles } from "../game/playerData";
+import { enemyBounty, unlockVehicleTiles } from "../game/playerData";
 import { pickEnemyVehicle, tierHasRegulars } from "../gamedirector/constants/enemyCatalog";
 import { directorAttempt, transitionToNextEvent } from "../gamedirector/gamedirector";
 import { combatIsBoss, recordCombatVictory } from "../gamedirector/schedule";
@@ -402,7 +402,7 @@ export function updateCombat(): void {
     const aimWorld = enemyCamera && mouseOverEnemy ? screenToWorld(enemyCamera, mouse.x, mouse.y) : null;
     const aimPlayerWorld = playerCamera && mouseOverPlayer ? screenToWorld(playerCamera, mouse.x, mouse.y) : null;
     if (fight.result === "victory" && !moneyAwarded) {
-        state.playerData.money += fight.moneyDropped;
+        state.playerData.money += enemyBounty(fight.moneyDropped, state.playerData.difficulty);
         unlockVehicleTiles(state.playerData, fight.enemy.instance.base);
         recordCombatVictory(state.gameDirector, encounterBoss);
         moneyAwarded = true;
